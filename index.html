@@ -265,7 +265,7 @@ pre.req{background:#f7f9fb;border:1px solid var(--line);border-radius:8px;paddin
         <div class="toolbar" style="margin:12px 0 0">
           <button class="btn pri" id="bApplyRoute">Use these legs (replaces Legs table)</button>
         </div>
-        <p class="note" style="margin:6px 0 0">Zone tags follow approximate ECA limits (North American 200 nm / median line, US Caribbean, Med from Gibraltar to the Dardanelles, North Sea, Baltic). Check them against your own ECA tags and retag in the Legs table where needed.</p>
+        <p class="note" style="margin:6px 0 0">Zone tags follow approximate ECA limits: North American (200 nm / median line) and US Caribbean, Mediterranean (Gibraltar to the Dardanelles), North Sea, Baltic; plus Norwegian Sea and Canadian Arctic from 1 Mar 2027 and North-East Atlantic from 1 Sep 2028, applied by the voyage start date. Local rules (e.g. China's coastal ECA, EU at-berth 0.1%) are not included. Check against your own ECA tags and retag in the Legs table where needed.</p>
       </div>
       <div class="card">
         <h2>Route map</h2>
@@ -874,8 +874,13 @@ $("#bAddStop").addEventListener("click",()=>{B().stops.push({name:"",lat:NaN,lon
 const shortName=n=>(n||"").replace(/\s*[—–-]\s*[^—–-]*\([A-Z]{5}\)\s*$/,"").replace(/\s*\([A-Z]{5}\)\s*$/,"").trim()||"—";
 
 const GATES=[
-  {id:"gsl",name:"Gulf of St Lawrence exit",opts:[{id:"belle",label:"Strait of Belle Isle",wp:[-56.958,51.21]},{id:"cabot",label:"Cabot Strait",wp:[-59.07,47.45]}]},
-  {id:"uk",name:"Passage round Great Britain",opts:[{id:"channel",label:"English Channel (Dover Strait)",wp:[1.495,51.139]},{id:"pentland",label:"Pentland Firth",wp:[-2.897,58.567]},{id:"fairisle",label:"Fair Isle Channel",wp:[-1.981,59.395]}]}
+  {id:"gsl",name:"Gulf of St Lawrence exit",maxNm:400,opts:[{id:"belle",label:"Strait of Belle Isle",wp:[-56.958,51.21]},{id:"cabot",label:"Cabot Strait",wp:[-59.07,47.45]}]},
+  {id:"uk",name:"Passage round Great Britain",maxNm:400,opts:[{id:"channel",label:"English Channel (Dover Strait)",wp:[1.495,51.139]},{id:"pentland",label:"Pentland Firth",wp:[-2.897,58.567]},{id:"fairisle",label:"Fair Isle Channel",wp:[-1.981,59.395]}]},
+  {id:"suez",name:"Suez Canal or Cape of Good Hope",extra:0.6,opts:[{id:"suez",label:"Suez Canal",wp:[32.315,31.125],maxDraft:20.1,flag:"avoidSuez"},{id:"cape",label:"Cape of Good Hope",wp:[18.0,-35.0]}]},
+  {id:"panama",name:"Panama Canal or round South America",extra:2.0,opts:[{id:"panama",label:"Panama Canal",wp:[-79.571,8.948],maxDraft:15.2,flag:"avoidPanama"},{id:"magellan",label:"Strait of Magellan",wp:[-70.713,-53.443]},{id:"horn",label:"Cape Horn / Drake Passage",wp:[-67.02,-56.065]}]},
+  {id:"indo",name:"Malacca / Sunda / Lombok",maxNm:1200,opts:[{id:"malacca",label:"Malacca & Singapore Straits",wp:[103.6,1.1]},{id:"sunda",label:"Sunda Strait",wp:[105.103,-6.293]},{id:"lombok",label:"Lombok Strait",wp:[115.615,-9.172]}]},
+  {id:"sicily",name:"Strait of Messina or south of Sicily",maxNm:250,opts:[{id:"messina",label:"Strait of Messina",wp:[15.634,37.939]},{id:"ssicily",label:"South of Sicily (Sicily Channel)",wp:[14.48,36.284]}]},
+  {id:"kiel",name:"Kiel Canal or round Skagen",maxNm:600,opts:[{id:"kiel",label:"Kiel Canal",wp:[9.88,54.475],maxDraft:7.0},{id:"skagen",label:"Round Skagen",wp:[10.749,57.717]}]}
 ];
 async function calcRoute(){
   const b=B(),S=b.stops,msg=$("#routeMsg");
@@ -885,7 +890,8 @@ async function calcRoute(){
   msg.textContent="Loading routing engine…";$("#bRoute").disabled=true;
   let sr;try{sr=await loadSR()}catch(e){msg.textContent=e.message;$("#bRoute").disabled=false;return}
   msg.textContent="Calculating route…";await new Promise(r=>setTimeout(r,30));
-  const opt={draft:num(b.draft),avoidSuez:b.avoidSuez,avoidPanama:b.avoidPanama,mergeNm:num(b.merge)};
+  const vt=parseStart(plan.inputs.start);
+  const opt={draft:num(b.draft),avoidSuez:b.avoidSuez,avoidPanama:b.avoidPanama,mergeNm:num(b.merge),date:Number.isFinite(vt)?vt:Date.now()};
   const allow=1+num(b.allow)/100;
   try{
     const warns=[],memo=new Map();
@@ -909,27 +915,40 @@ async function calcRoute(){
         if(r.snapB>15)warns.push(`${shortName(z.name)} is ${f0(r.snapB)} nm from the route network; the leg ends at the nearest network point.`)});
       let final=base;
       if(!G.vias.length){
-        const rel=GATES.map(g=>({g,hits:g.opts.map(o=>near(base.coords,o.wp))})).filter(x=>Math.min(...x.hits.map(h=>h.d))<=120);
+        const okOpt=o=>!(o.maxDraft&&num(b.draft)>o.maxDraft)&&!(o.flag&&b[o.flag]);
+        const rel=GATES.map(g0=>{const g={...g0,opts:g0.opts.filter(okOpt)};return {g,hits:g.opts.map(o=>near(base.coords,o.wp))}}).filter(x=>x.g.opts.length>=2&&Math.min(...x.hits.map(h=>h.d))<=120);
         if(rel.length){
           const pkey=nrm(shortName(G.from.name))+">"+nrm(shortName(G.to.name));
           const sel={};rel.forEach(x=>{const k=pkey+":"+x.g.id;let s=b.gates[k];if(!x.g.opts.some(o=>o.id===s)){let bi=0;x.hits.forEach((h,i)=>{if(h.d<x.hits[bi].d)bi=i});s=x.g.opts[bi].id}sel[x.g.id]=s});
-          const build=over=>{const pick=Object.assign({},sel,over);const wps=rel.map(x=>{const o=x.g.opts.find(o=>o.id===pick[x.g.id]);return {c:o.wp,idx:x.hits[x.g.opts.indexOf(o)].idx}}).sort((a,b)=>a.idx-b.idx);return routePts([P0[0],...wps.map(w=>({c:w.c})),P0[P0.length-1]])};
+          const MAJOR=new Set(["suez","panama"]);
+          // two stages: canal/ocean choices first, then only the local straits that still lie on that route
+          const build=over=>{const pick=Object.assign({},sel,over);
+            const wpOf=x=>x.g.opts.find(o=>o.id===pick[x.g.id]).wp;
+            const order=(route,list)=>list.map(x=>({x,c:wpOf(x),idx:near(route.coords,wpOf(x)).idx})).sort((a,b)=>a.idx-b.idx);
+            const maj=rel.filter(x=>MAJOR.has(x.g.id));
+            let rA=maj.length?routePts([P0[0],...order(base,maj).map(w=>({c:w.c})),P0[P0.length-1]]):base;
+            const minor=rel.filter(x=>!MAJOR.has(x.g.id)&&(x.g.id===over.__force||Math.min(...x.g.opts.map(o=>near(rA.coords,o.wp).d))<=120));
+            const all=maj.concat(minor);
+            const r=minor.length?routePts([P0[0],...order(rA,all).map(w=>({c:w.c})),P0[P0.length-1]]):rA;
+            r.active=new Set(all.map(x=>x.g.id));return r};
+          const fin=build({});
           rel.forEach(x=>{
-            const opts=x.g.opts.map(o=>{const r=build({[x.g.id]:o.id});const runs=sr.splitCoords(r.coords,opt.mergeNm);const e=runs.filter(q=>q.zone==="ECA").reduce((s,q)=>s+q.nm,0),ne=r.nm-e;return {o,nm:r.nm,eca:e,non:ne}});
-            const minNm=Math.min(...opts.map(q=>q.nm));const shown=opts.filter(q=>q.nm<=minNm*1.25||q.o.id===sel[x.g.id]);
+            if(!fin.active.has(x.g.id))return;
+            const opts=x.g.opts.map(o=>{const r=build({[x.g.id]:o.id,__force:x.g.id});const runs=sr.splitCoords(r.coords,opt.mergeNm,opt.date);const e=runs.filter(q=>q.zone==="ECA").reduce((s,q)=>s+q.nm,0),ne=r.nm-e;return {o,nm:r.nm,eca:e,non:ne}});
+            const minNm=Math.min(...opts.map(q=>q.nm));const shown=opts.filter(q=>q.nm<=minNm+(x.g.maxNm!=null?x.g.maxNm:minNm*(x.g.extra||0.25))||q.o.id===sel[x.g.id]);
             if(shown.length>=2)choices.push({key:pkey+":"+x.g.id,group:x.g,from:G.from,to:G.to,opts:shown,sel:sel[x.g.id],minNm});
           });
-          final=build({});
+          final=fin;
         }
       }
-      if(num(b.draft)>7.0)final.passes.delete("kiel");if(num(b.draft)>7.3)final.passes.delete("corinth");
+      ["northeast","northwest","babalmandab"].forEach(k=>final.passes.delete(k));if(num(b.draft)>7.0)final.passes.delete("kiel");if(num(b.draft)>7.3)final.passes.delete("corinth");
       passages.push({from:G.from,to:G.to,coords:final.coords,passages:final.passes});
     }
     const legs=[];let n=0,allRuns=[];
     const stopRow=s=>s.role==="port"?{type:"Port Ops",desc:`${shortName(s.name)} — port stay`,days:num(s.days),bunker:!!s.bunker}:s.role==="drydock"?{type:"Drydock",desc:`${shortName(s.name)} — drydock`,days:0,bunker:false}:null;
     const first=stopRow(S[0]);if(first)legs.push(first);
     passages.forEach(P=>{
-      n++;const runs=sr.splitCoords(P.coords,opt.mergeNm);allRuns=allRuns.concat(runs);
+      n++;const runs=sr.splitCoords(P.coords,opt.mergeNm,opt.date);allRuns=allRuns.concat(runs);
       const A=shortName(P.from.name),Z=shortName(P.to.name);
       runs.forEach((r,k)=>{
         const fromL=k===0?A:(runs[k-1].zone==="ECA"?"ECA exit":"ECA entry");
