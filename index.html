@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Voyage Fuel &amp; ROB Planner</title>
+<meta name="theme-color" content="#0f2742">
+<meta name="description" content="Voyage fuel consumption, ROB and bunker planning for ships: ECA/Non-ECA split, port stays, drydock, safety margins.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Voyage Planner">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0f2742; --navy-2:#173a5e; --ink:#13202e; --ink-2:#4a5866; --muted:#7a8794;
+  --line:#dfe4ea; --line-2:#eef1f4; --bg:#f4f6f8; --card:#ffffff;
+  --input:#fff7cc; --input-line:#e6d58a; --port:#eef3f8; --dd:#f3eefa;
+  --lsmgo:#2a78d6; --vlsfo:#eb6834;
+  --good:#16794c; --good-bg:#e5f4ec; --warn:#9a6200; --warn-bg:#fdf3dc; --bad:#b42318; --bad-bg:#fde8e6;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 'IBM Plex Sans',system-ui,sans-serif}
+button,input,select{font:inherit;color:inherit}
+header{background:var(--navy);color:#fff;padding:calc(14px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left))}
+#bInstall{background:#f5c842!important;color:#0f2742!important;border-color:#f5c842!important;font-weight:600}
+.offline-pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;background:rgba(255,255,255,.15);margin-left:8px;vertical-align:2px}
+.hrow{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
+.vessel-in{display:block;background:transparent;border:1px solid transparent;color:#fff;font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding:2px 4px;margin-left:-5px;width:min(420px,80vw);border-radius:4px;opacity:.85}
+.vessel-in::placeholder{color:rgba(255,255,255,.55)}
+.vessel-in:hover,.vessel-in:focus{border-color:rgba(255,255,255,.3);outline:none;opacity:1}
+.title-in{background:transparent;border:1px solid transparent;color:#fff;font-size:20px;font-weight:600;padding:2px 4px;margin-left:-5px;width:max(300px,calc(100vw - 520px));border-radius:4px;text-overflow:ellipsis}
+.title-in:hover,.title-in:focus{border-color:rgba(255,255,255,.3);outline:none}
+.route-line{font-size:13px;opacity:.8;margin:2px 0 10px}
+.hbtns{display:flex;gap:8px;flex-wrap:wrap;padding-bottom:10px}
+.hbtns button{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:6px 12px;cursor:pointer}
+.hbtns button:hover{background:rgba(255,255,255,.2)}
+.hbtns button:disabled{opacity:.4;cursor:default;background:rgba(255,255,255,.1)}
+.reset-opt{display:block;width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:8px;padding:10px 12px;margin-top:8px;cursor:pointer}
+.reset-opt:hover{background:var(--line-2)}.reset-opt b{display:block}.reset-opt span{font-size:12px;color:var(--muted)}
+.reset-opt:disabled{opacity:.45;cursor:default}
+nav{display:flex;gap:2px;overflow-x:auto}
+nav button{background:none;border:0;color:rgba(255,255,255,.7);padding:10px 16px;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;font-weight:500}
+nav button.on{color:#fff;border-bottom-color:#f5c842}
+nav .badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;font-size:11px;margin-left:6px;background:var(--bad);color:#fff}
+nav .badge.ok{background:var(--good)}
+main{padding:18px 20px 60px;max-width:1500px;margin:0 auto}
+.view{display:none}.view.on{display:block}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:minmax(320px,420px) minmax(0,1fr)}
+@media(max-width:980px){.g2{grid-template-columns:minmax(0,1fr)}}
+.g2>*{min-width:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+.card h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--navy-2);margin:0 0 12px;font-weight:700}
+.card h3{font-size:13px;margin:16px 0 8px;color:var(--ink-2);font-weight:600}
+.inp-grid{display:grid;grid-template-columns:1fr 110px 62px;gap:6px 8px;align-items:center}
+.inp-grid label{color:var(--ink-2);font-size:13px}
+.inp-grid .u{font-size:12px;color:var(--muted)}
+.inp-grid .sect{grid-column:1/-1;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-top:10px;border-top:1px solid var(--line-2);padding-top:10px}
+.inp-grid .sect:first-child{margin-top:0;border-top:0;padding-top:0}
+input.y,select.y{background:var(--input);border:1px solid var(--input-line);border-radius:5px;padding:5px 7px;width:100%;font-family:var(--mono);font-size:13px;text-align:right}
+select.y{text-align:left;font-family:inherit}
+input.y:focus,select.y:focus{outline:2px solid #f5c842;outline-offset:0}
+input[type=datetime-local].y{text-align:left;font-size:12px}
+.wide{grid-column:2/4}
+.helper{grid-column:1/-1;display:flex;justify-content:space-between;font-size:12px;color:var(--ink-2);background:var(--line-2);border-radius:5px;padding:5px 8px}
+.helper b{font-family:var(--mono);font-weight:500}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.kpi .k{font-size:12px;color:var(--ink-2)}
+.kpi .v{font-size:24px;font-weight:600;font-family:var(--mono);letter-spacing:-.02em;margin-top:2px}
+.kpi .s{font-size:12px;color:var(--muted)}
+.kpi .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px}
+table{border-collapse:collapse;width:100%}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line-2);text-align:right;white-space:nowrap}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2);font-weight:600;background:#f7f9fb;position:sticky;top:0;z-index:1}
+td.l,th.l{text-align:left}
+td.n{font-family:var(--mono);font-size:13px}
+tr.port td{background:var(--port)} tr.dd td{background:var(--dd)}
+tr.inactive td{opacity:.38}
+tr.total td{font-weight:600;border-top:2px solid var(--line)}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px;max-height:70vh}
+.scroll table th{border-bottom:1px solid var(--line)}
+.pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.pill.L{background:#e3eefb;color:#1d5fae}.pill.V{background:#fde9e0;color:#b8481d}
+.status{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:8px;margin-top:10px;font-size:13px}
+.status.good{background:var(--good-bg);color:var(--good)}.status.warn{background:var(--warn-bg);color:var(--warn)}.status.bad{background:var(--bad-bg);color:var(--bad)}
+.status .ic{font-weight:700;font-size:15px;line-height:1.2}
+.neg{color:var(--bad)} .pos{color:var(--good)}
+.legs td{padding:3px 4px}
+.legs input,.legs select{border:1px solid transparent;background:transparent;border-radius:4px;padding:4px 5px;width:100%;font-size:13px}
+.legs input:hover,.legs select:hover{border-color:var(--line)}
+.legs input.e,.legs select.e{background:var(--input);border-color:var(--input-line)}
+.legs input.num{font-family:var(--mono);text-align:right;width:78px}
+.legs input.lab{width:46px}.legs input.desc{min-width:220px}.legs input.tag{width:110px}
+.legs select{width:auto}
+.legs .act{display:flex;gap:2px}
+.legs .act button{border:1px solid var(--line);background:#fff;border-radius:4px;width:26px;height:26px;cursor:pointer;padding:0;color:var(--ink-2)}
+.legs .act button:hover{background:var(--line-2)}
+.legs .act button.del:hover{background:var(--bad-bg);color:var(--bad)}
+.legs td.c{color:var(--ink-2)}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center}
+.btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 12px;cursor:pointer;font-weight:500}
+.btn:hover{background:var(--line-2)}
+.btn.pri{background:var(--navy);color:#fff;border-color:var(--navy)}
+.btn.pri:hover{background:var(--navy-2)}
+.btn:disabled{opacity:.5;cursor:default}
+.note{font-size:12px;color:var(--muted)}
+.chart-wrap{position:relative}
+.chart-wrap svg{display:block;width:100%;height:auto}
+.legend{display:flex;gap:16px;font-size:12px;color:var(--ink-2);margin-bottom:6px;flex-wrap:wrap}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.legend i.dash{background:repeating-linear-gradient(90deg,#9aa5b1 0 4px,transparent 4px 7px)!important;height:2px}
+.tip{position:absolute;pointer-events:none;background:#13202e;color:#fff;font-size:12px;padding:8px 10px;border-radius:6px;white-space:nowrap;display:none;z-index:5;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+.tip b{font-family:var(--mono);font-weight:500}
+.vlist{list-style:none;padding:0;margin:0}
+.vlist li{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--line-2);align-items:flex-start}
+.vlist li:last-child{border-bottom:0}
+.vlist .ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;flex:none;color:#fff}
+.vlist .ic.good{background:var(--good)}.vlist .ic.warn{background:#d18b00}.vlist .ic.bad{background:var(--bad)}
+.vlist .t{font-weight:600}.vlist .d{font-size:13px;color:var(--ink-2)}
+pre.req{background:#f7f9fb;border:1px solid var(--line);border-radius:8px;padding:12px;font:12px/1.5 var(--mono);white-space:pre-wrap;margin:0}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;display:none;z-index:50}
+.saved-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line-2)}
+.saved-row .nm{font-weight:600}.saved-row .dt{font-size:12px;color:var(--muted)}
+.modal-bg{position:fixed;inset:0;background:rgba(15,39,66,.45);display:none;align-items:center;justify-content:center;z-index:40;padding:16px}
+.modal{background:#fff;border-radius:12px;padding:18px;max-width:520px;width:100%}
+.modal h3{margin:0 0 10px}
+.modal textarea{width:100%;min-height:160px;font:12px var(--mono);border:1px solid var(--line);border-radius:6px;padding:8px}
+.modal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.pp-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:6px 10px;align-items:center;font-size:13px}
+.pp-grid .h{font-size:11px;text-transform:uppercase;color:var(--ink-2);font-weight:600}
+.pp-grid .n{font-family:var(--mono);text-align:right}
+.stops td{padding:3px 4px}
+.stops input,.stops select{border:1px solid var(--input-line);background:var(--input);border-radius:4px;padding:5px 6px;font-size:13px;width:100%}
+.stops input.pt{min-width:230px}.stops input.co{width:110px;font-family:var(--mono)}.stops input.dy{width:64px;font-family:var(--mono);text-align:right}
+.stops select{width:auto}
+.opt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 16px;align-items:end}
+.opt-grid label{display:block;font-size:12px;color:var(--ink-2);margin-bottom:3px}
+.opt-grid .ck{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink-2)}
+.opt-grid .ck input{width:auto}
+#rmap svg{display:block;width:100%;max-width:1100px;height:auto;background:#eaf2f8;border-radius:8px}
+.warnbox{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:10px 12px;font-size:13px;margin-top:10px}
+@media print{header nav,.hbtns,.toolbar,.no-print{display:none!important}.view{display:block!important}main{padding:0}.card{break-inside:avoid}}
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <div>
+      <input class="vessel-in" id="vesselIn" aria-label="Ship name" placeholder="Enter ship name, e.g. M.V. …" title="Ship name: click to edit">
+      <input class="title-in" id="voyTitle" aria-label="Voyage title">
+      <div class="route-line" id="routeLine"></div>
+    </div>
+    <div class="hbtns">
+      <button id="bInstall" style="display:none">⬇ Install app</button>
+      <button id="bUndo" title="Undo (Ctrl+Z)" disabled>↶ Undo</button>
+      <button id="bRedo" title="Redo (Ctrl+Y)" disabled>↷ Redo</button>
+      <button id="bReset">Reset ▾</button>
+      <button id="bSave">Save voyage</button>
+      <button id="bExport">Export ▾</button>
+      <button id="bImport">Import</button>
+      <button id="bNew">New voyage</button>
+    </div>
+  </div>
+  <nav id="tabs">
+    <button data-v="plan" class="on">Voyage plan</button>
+    <button data-v="builder">Route builder</button>
+    <button data-v="legs">Legs &amp; ROB table</button>
+    <button data-v="check">Validation <span class="badge" id="vBadge">0</span></button>
+    <button data-v="saved">Saved voyages</button>
+  </nav>
+</header>
+
+<main>
+<!-- PLAN -->
+<section class="view on" id="v-plan">
+  <div class="kpis" id="kpis"></div>
+  <div class="grid g2">
+    <div class="card">
+      <h2>Inputs</h2>
+      <div class="inp-grid" id="inputs"></div>
+    </div>
+    <div class="grid" style="align-content:start">
+      <div class="card">
+        <h2>Bunker supply check — at final port</h2>
+        <div id="checkTbl"></div>
+        <div id="checkStatus"></div>
+        <div class="toolbar no-print" style="margin:12px 0 0">
+          <button class="btn pri" id="bSolve">Set lift to exact requirement</button>
+          <span class="note">Sets the lift so usable ROB at the final port equals the safety margin (surplus ≈ 0).</span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Fuel consumption summary — bunkers required</h2>
+        <div class="scroll" style="max-height:none" id="sumTbl"></div>
+      </div>
+      <div class="card">
+        <h2>ROB profile</h2>
+        <div class="legend">
+          <span><i style="background:var(--lsmgo)"></i>LSMGO physical ROB</span>
+          <span><i style="background:var(--vlsfo)"></i>VLSFO physical ROB</span>
+          <span><i class="dash"></i>Unpumpable level</span>
+        </div>
+        <div class="chart-wrap" id="chart"><div class="tip" id="tip"></div></div>
+      </div>
+      <div class="card">
+        <h2>ROB at each port call</h2>
+        <div class="scroll" style="max-height:none" id="portTbl"></div>
+      </div>
+      <div class="card">
+        <h2>Bunker requisition text</h2>
+        <pre class="req" id="reqText"></pre>
+        <div class="toolbar no-print" style="margin:10px 0 0"><button class="btn" id="bCopyReq">Copy text</button><span class="note">For ship–shore email / bunker enquiry.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ROUTE BUILDER -->
+<section class="view" id="v-builder">
+  <div class="card" style="margin-bottom:16px">
+    <h2>Port rotation</h2>
+    <p class="note" style="margin-top:0">Pick each port in sailing order (type to search ~1,600 ports, or enter your own name and lat/lon, e.g. <code>48 18.0N</code> / <code>069 24.0W</code> or decimals). “Route via” forces the route through a point, such as Cabot Strait; “Leg break” starts a new leg without a stay, such as a pilot station. Distances come from the free searoute network for <b>bunker estimates only, not for navigation</b>: replace them with passage-plan figures once the plan is drawn.</p>
+    <div class="scroll" style="max-height:none"><table class="stops" id="stopTbl"></table></div>
+    <div class="toolbar" style="margin:10px 0 0"><button class="btn" id="bAddStop">+ Add port / point</button></div>
+    <datalist id="portList"></datalist>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <h2>Routing options</h2>
+    <div class="opt-grid">
+      <div><label for="o_draft">Vessel draft (m), blocks canals too shallow (Corinth 7.3, Kiel 7.0)</label><input class="y" type="number" step="any" id="o_draft"></div>
+      <div><label for="o_allow">Distance allowance (%), added for routing/weather; searoute runs ~3–5% short</label><input class="y" type="number" step="any" id="o_allow"></div>
+      <div><label for="o_merge">Merge zone pockets shorter than (nm)</label><input class="y" type="number" step="any" id="o_merge"></div>
+      <div class="ck"><input type="checkbox" id="o_suez"><label for="o_suez" style="margin:0">Avoid Suez</label></div>
+      <div class="ck"><input type="checkbox" id="o_pan"><label for="o_pan" style="margin:0">Avoid Panama</label></div>
+    </div>
+    <div class="toolbar" style="margin:14px 0 0">
+      <button class="btn pri" id="bRoute">Calculate route</button>
+      <span class="note" id="routeMsg"></span>
+    </div>
+  </div>
+  <div id="routeOut" style="display:none">
+    <div class="grid">
+      <div class="card">
+        <h2>Proposed legs</h2>
+        <div class="scroll" style="max-height:none" id="rLegs"></div>
+        <div id="rWarn"></div>
+        <div class="toolbar" style="margin:12px 0 0">
+          <button class="btn pri" id="bApplyRoute">Use these legs (replaces Legs table)</button>
+        </div>
+        <p class="note" style="margin:6px 0 0">Zone tags follow approximate ECA limits (North American 200 nm / median line, US Caribbean, Med from Gibraltar to the Dardanelles, North Sea, Baltic). Check them against your own ECA tags and retag in the Legs table where needed.</p>
+      </div>
+      <div class="card">
+        <h2>Route map</h2>
+        <div class="legend"><span><i style="background:var(--lsmgo)"></i>ECA (LSMGO)</span><span><i style="background:var(--vlsfo)"></i>Non-ECA (VLSFO)</span></div>
+        <div id="rmap"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LEGS -->
+<section class="view" id="v-legs">
+  <div class="toolbar">
+    <button class="btn pri" data-add="Transit">+ Transit leg</button>
+    <button class="btn" data-add="Port Ops">+ Port stay</button>
+    <button class="btn" data-add="Drydock">+ Drydock</button>
+    <span class="note">Yellow cells are editable. Split each passage into ECA / Non-ECA rows exactly as the passage plan states. Rows tagged “Always” or matching the selected route are counted. Tick “Bunker” on the row where the lift is taken (added after that row’s consumption). The last active row is the final port.</span>
+  </div>
+  <div class="scroll"><table class="legs" id="legTbl"></table></div>
+</section>
+
+<!-- VALIDATION -->
+<section class="view" id="v-check">
+  <div class="grid g2">
+    <div class="card">
+      <h2>Validation checklist</h2>
+      <ul class="vlist" id="vlist"></ul>
+    </div>
+    <div class="card">
+      <h2>Distance cross-check vs passage plan</h2>
+      <p class="note" style="margin-top:0">Enter the passage-plan totals for each route variant. The app sums active ECA / Non-ECA transit distances for each variant and flags any mismatch (mis-tagged or missing leg).</p>
+      <div class="pp-grid" id="ppGrid"></div>
+    </div>
+  </div>
+</section>
+
+<!-- SAVED -->
+<section class="view" id="v-saved">
+  <div class="card" style="max-width:760px">
+    <h2>Saved voyages</h2>
+    <p class="note" style="margin-top:0" id="savedNote">Connecting to storage…</p>
+    <div id="savedList"></div>
+    <div class="toolbar" style="margin-top:14px">
+      <button class="btn" id="bBackup">Back up all saved voyages</button>
+      <button class="btn" id="bRestore">Restore from backup</button>
+      <button class="btn" id="bLoadSample">Load sample voyage (Sorel → Istanbul)</button>
+    </div>
+  </div>
+</section>
+</main>
+
+<div class="modal-bg" id="modal"><div class="modal" id="modalBody"></div></div>
+<div class="toast" id="toast"></div>
+
+<script id="engine">
+/* ===== Calculation engine (pure; follows Project build spec §2–§6) ===== */
+const R2 = x => Math.round(x*100)/100;
+function sampleVoyage(){
+  return {
+    vessel:"M.V. Federal Frontier",
+    title:"Sorel → Escoumins → Savona → Torre Annunziata → Varna (drydock) → Istanbul",
+    inputs:{spdECA:11.5,spdNon:11.8,rECA:14.2,rNon:14.89,rPort:3,ddDays:15,rDD:3.5,
+      mV:2,mL:3,robL:70,robV:154.6,unpL:20,unpV:40,supL:270,supV:70,
+      start:"2026-07-16T18:00",route:"Cabot Strait"},
+    legs:[
+      ["","Sorel — cleaning & loading (at berth)","Port Ops","ECA","Always",0,7,true],
+      ["1","Sorel → Escoumins (pilotage)","Transit","ECA","Always",223],
+      ["2a","Escoumins → NAECA exit","Transit","ECA","Belle Isle",910],
+      ["2b","NAECA exit → ECA entry","Transit","Non-ECA","Belle Isle",2060],
+      ["2c","ECA entry → Savona","Transit","ECA","Belle Isle",910],
+      ["2a","Escoumins → NAECA exit","Transit","ECA","Cabot Strait",755],
+      ["2b","NAECA exit → ECA entry","Transit","Non-ECA","Cabot Strait",2350],
+      ["2c","ECA entry → Savona","Transit","ECA","Cabot Strait",910],
+      ["","Savona — discharging (at berth)","Port Ops","ECA","Always",0,2.5],
+      ["3","Savona → Torre Annunziata","Transit","ECA","Always",385],
+      ["","Torre Annunziata — discharging (at berth)","Port Ops","ECA","Always",0,5],
+      ["4a","Torre Annunziata → ECA exit","Transit","ECA","Always",885],
+      ["4b","ECA exit → ECA entry","Transit","Non-ECA","Always",142],
+      ["4c","ECA entry → ECA exit","Transit","ECA","Always",27],
+      ["4d","ECA exit → Varna","Transit","Non-ECA","Always",146],
+      ["","Varna — drydock","Drydock","ECA","Always",0,0],
+      ["5a","Varna → ECA entry","Transit","Non-ECA","Always",146],
+      ["5b","ECA entry → Istanbul","Transit","ECA","Always",22]
+    ].map(a=>({id:uid(),label:a[0],desc:a[1],type:a[2],zone:a[3],tag:a[4],dist:a[5],days:a[6]||0,bunker:!!a[7]})),
+    pp:{"Belle Isle":{eca:3362,non:2494},"Cabot Strait":{eca:3207,non:2784}},
+    builder:defaultBuilder()
+  };
+}
+function defaultBuilder(){return {draft:10,allow:5,merge:75,avoidSuez:false,avoidPanama:false,stops:[
+  {name:"Sorel — Canada (CASOR)",lat:46.0428,lon:-73.1123,role:"port",days:7,bunker:true},
+  {name:"Les Escoumins pilot station",lat:48.30,lon:-69.40,role:"break",days:0},
+  {name:"Cabot Strait (waypoint)",lat:47.33,lon:-59.85,role:"via",days:0},
+  {name:"Savona — Italy (ITSVN)",lat:44.28,lon:8.5,role:"port",days:2.5},
+  {name:"Torre Annunziata",lat:40.75,lon:14.44,role:"port",days:5},
+  {name:"Varna — Bulgaria (BGVAR)",lat:43.2141,lon:27.9147,role:"drydock",days:0},
+  {name:"Istanbul — Turkey (TRIST)",lat:41.0082,lon:28.9784,role:"port",days:0}]}}
+function uid(){return Math.random().toString(36).slice(2,10)}
+function num(v){const n=parseFloat(v);return isFinite(n)?n:0}
+function parseStart(s){ // treat as ship's time, arithmetic in UTC to avoid DST shifts
+  const m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(s||"");
+  return m?Date.UTC(+m[1],m[2]-1,+m[3],+m[4],+m[5]):NaN;
+}
+function routeTags(legs){return [...new Set(legs.map(l=>(l.tag||"").trim()).filter(t=>t&&t!=="Always"))]}
+function legActive(l,route){const t=(l.tag||"Always").trim()||"Always";return (t==="Always"||t===route)?1:0}
+function compute(plan, override){
+  const I=Object.assign({},plan.inputs,override||{});
+  const v=k=>num(I[k]);
+  const start=parseStart(I.start);
+  let L=v("robL"),V=v("robV"),t=start;
+  const rows=plan.legs.map(l=>{
+    const active=legActive(l,I.route);
+    const transit=l.type==="Transit";
+    const speed=transit?(l.zone==="ECA"?v("spdECA"):v("spdNon")):null;
+    let days;
+    if(!active) days=0;
+    else if(transit) days=speed>0?num(l.dist)/speed/24:NaN;
+    else if(l.type==="Drydock") days=v("ddDays");
+    else days=num(l.days);
+    const fuel=transit?(l.zone==="ECA"?"LSMGO":"VLSFO"):"LSMGO";
+    const rate=l.type==="Port Ops"?v("rPort"):l.type==="Drydock"?v("rDD"):fuel==="LSMGO"?v("rECA"):v("rNon");
+    const cons=days*rate;
+    const robLbefore=L,robVbefore=V;
+    if(fuel==="LSMGO")L-=cons;else V-=cons;
+    if(l.bunker&&active){L+=v("supL");V+=v("supV");}
+    const eta=t, etd=t+days*86400000; t=etd;
+    return {leg:l,active,speed,days,fuel,rate,cons,robLbefore,robVbefore,robL:L,robV:V,eta,etd};
+  });
+  const act=rows.filter(r=>r.active);
+  const sumF=(f,k)=>rows.reduce((s,r)=>s+(r.fuel===f?r[k]*r.active:0),0); // SUMPRODUCT((Fuel=X)*k*Active)
+  const marginL=v("mL")*v("rECA"), marginV=v("mV")*v("rNon");
+  const mk=(f,days,cons,margin,rob,unp)=>{const tot=cons+margin,usable=rob-unp;return {fuel:f,days,cons,margin,tot,rob,unp,usable,req:Math.max(0,tot-usable),exact:tot-usable};};
+  const sL=mk("LSMGO",sumF("LSMGO","days"),sumF("LSMGO","cons"),marginL,v("robL"),v("unpL"));
+  const sV=mk("VLSFO",sumF("VLSFO","days"),sumF("VLSFO","cons"),marginV,v("robV"),v("unpV"));
+  const last=act[act.length-1];
+  const bunkerRow=rows.find(r=>r.leg.bunker&&r.active)||null;
+  const arrL=last?last.robL:v("robL"), arrV=last?last.robV:v("robV");
+  const chk=(f,raw,unp,margin)=>({fuel:f,raw,unp,usable:raw-unp,margin,surplus:raw-unp-margin});
+  const check=[chk("LSMGO",arrL,v("unpL"),marginL),chk("VLSFO",arrV,v("unpV"),marginV)];
+  return {I,rows,act,sum:[sL,sV],check,last,bunkerRow,start,endT:last?last.etd:start,
+    totalDays:act.reduce((s,r)=>s+r.days,0),
+    dist:{eca:act.filter(r=>r.leg.type==="Transit"&&r.leg.zone==="ECA").reduce((s,r)=>s+num(r.leg.dist),0),
+          non:act.filter(r=>r.leg.type==="Transit"&&r.leg.zone!=="ECA").reduce((s,r)=>s+num(r.leg.dist),0)}};
+}
+function portName(desc){return (desc||"").split(/\s[—–-]\s/)[0].trim()||desc||"—"}
+function lastPortName(r){if(!r)return "—";const d=r.leg.desc||"";if(r.leg.type!=="Transit")return portName(d);const p=d.split(/→|->/);return p[p.length-1].trim()||"final port"}
+</script>
+
+<script>
+/* ===== UI ===== */
+let plan=null, savedId=null, dbNS=null, userId=null, dlNS=null;
+const $=s=>document.querySelector(s);
+const f2=x=>isFinite(x)?x.toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2}):"—";
+const f1=x=>isFinite(x)?x.toLocaleString("en-GB",{minimumFractionDigits:1,maximumFractionDigits:1}):"—";
+const f0=x=>isFinite(x)?Math.round(x).toLocaleString("en-GB"):"—";
+const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const fdt=t=>{if(!isFinite(t))return"—";const d=new Date(t);const p=n=>String(n).padStart(2,"0");return `${p(d.getUTCDate())} ${MON[d.getUTCMonth()]} ${String(d.getUTCFullYear()).slice(2)} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`};
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(toast._t);toast._t=setTimeout(()=>t.style.display="none",2600)}
+
+const INPUTS=[
+  ["sect","Speeds"],
+  ["spdECA","Speed — ECA","kn"],["spdNon","Speed — Non-ECA","kn"],
+  ["sect","Consumption rates"],
+  ["rECA","LSMGO — underway ECA","MT/d"],["rNon","VLSFO — underway Non-ECA","MT/d"],
+  ["rPort","LSMGO — in port / cargo ops","MT/d"],["ddDays","Drydock duration","days"],["rDD","LSMGO — during drydock","MT/d"],
+  ["sect","Safety margin (usable fuel at final port)"],
+  ["mV","Safety margin — VLSFO","days"],["mL","Safety margin — LSMGO","days"],
+  ["sect","ROB at voyage start"],
+  ["robL","Current ROB — LSMGO","MT"],["robV","Current ROB — VLSFO","MT"],
+  ["unpL","Unpumpable — LSMGO","MT"],["unpV","Unpumpable — VLSFO","MT"],
+  ["helper"],
+  ["sect","Bunker supply"],
+  ["supL","Bunker lift — LSMGO","MT"],["supV","Bunker lift — VLSFO","MT"],
+  ["sect","Clock & routing"],
+  ["start","Start date/time (ship’s time)","dt"],["route","Route choice","route"]
+];
+function buildInputs(){
+  const g=$("#inputs");g.innerHTML="";
+  for(const d of INPUTS){
+    if(d[0]==="sect"){g.insertAdjacentHTML("beforeend",`<div class="sect">${d[1]}</div>`);continue}
+    if(d[0]==="helper"){g.insertAdjacentHTML("beforeend",`<div class="helper"><span>Usable ROB today — LSMGO</span><b id="uL"></b></div><div class="helper"><span>Usable ROB today — VLSFO</span><b id="uV"></b></div>`);continue}
+    const [k,lab,u]=d;
+    if(u==="dt"){g.insertAdjacentHTML("beforeend",`<label for="i_${k}">${lab}</label><input class="y wide" type="datetime-local" id="i_${k}" data-k="${k}">`);}
+    else if(u==="route"){g.insertAdjacentHTML("beforeend",`<label for="i_${k}">${lab}</label><select class="y wide" id="i_${k}" data-k="${k}"></select>`);}
+    else g.insertAdjacentHTML("beforeend",`<label for="i_${k}" id="lab_${k}">${lab}</label><input class="y" type="number" step="any" inputmode="decimal" id="i_${k}" data-k="${k}"><span class="u">${u}</span>`);
+  }
+  g.querySelectorAll("[data-k]").forEach(el=>{
+    el.addEventListener("input",()=>{plan.inputs[el.dataset.k]=el.type==="number"?el.value:el.value;refresh()});
+  });
+}
+function fillInputs(){
+  for(const d of INPUTS){const el=document.getElementById("i_"+d[0]);if(!el||el.tagName==="SELECT")continue;el.value=plan.inputs[d[0]]??""}
+  fillRoute();
+  $("#voyTitle").value=plan.title||"";
+  $("#vesselIn").value=plan.vessel||"";document.title=(plan.vessel?plan.vessel+" — ":"")+"Voyage Fuel & ROB Planner";
+}
+function fillRoute(){
+  const s=$("#i_route"),tags=routeTags(plan.legs);
+  if(tags.length&&!tags.includes(plan.inputs.route))plan.inputs.route=tags[0];
+  s.innerHTML=tags.length?tags.map(t=>`<option ${t===plan.inputs.route?"selected":""}>${esc(t)}</option>`).join(""):`<option value="">(no route variants)</option>`;
+  s.disabled=!tags.length;
+}
+
+/* ---- legs editor ---- */
+function buildLegs(){
+  const t=$("#legTbl");
+  let h=`<thead><tr><th class="l">Leg</th><th class="l">Description</th><th class="l">Type</th><th class="l">Zone</th><th class="l">Route tag</th><th>Dist (nm)</th><th>Fixed days</th><th>Bunker</th><th>Active</th><th>Speed</th><th>Days</th><th class="l">Fuel</th><th>Rate</th><th>Cons (MT)</th><th>LSMGO ROB</th><th>VLSFO ROB</th><th class="l">ETA</th><th class="l">ETD</th><th></th></tr></thead><tbody>`;
+  plan.legs.forEach((l,i)=>{
+    const tr=l.type!=="Transit";
+    h+=`<tr data-i="${i}" class="${l.type==="Port Ops"?"port":l.type==="Drydock"?"dd":""}">
+<td><input class="e lab" data-f="label" value="${esc(l.label)}"></td>
+<td><input class="e desc" data-f="desc" value="${esc(l.desc)}"></td>
+<td><select class="e" data-f="type">${["Transit","Port Ops","Drydock"].map(o=>`<option ${o===l.type?"selected":""}>${o}</option>`).join("")}</select></td>
+<td>${tr?`<span class="note">port (LSMGO)</span>`:`<select class="e" data-f="zone">${["ECA","Non-ECA"].map(o=>`<option ${o===l.zone?"selected":""}>${o}</option>`).join("")}</select>`}</td>
+<td><input class="e tag" data-f="tag" list="tagList" value="${esc(l.tag)}"></td>
+<td>${tr?"":`<input class="e num" type="number" step="any" data-f="dist" value="${esc(l.dist)}">`}</td>
+<td>${l.type==="Port Ops"?`<input class="e num" type="number" step="any" data-f="days" value="${esc(l.days)}">`:l.type==="Drydock"?`<span class="note">input</span>`:""}</td>
+<td style="text-align:center"><input type="radio" name="bunk" data-f="bunker" ${l.bunker?"checked":""} style="width:auto" aria-label="Bunker lift on this row"></td>
+<td class="c n" data-c="active"></td><td class="c n" data-c="speed"></td><td class="c n" data-c="days"></td><td class="c l" data-c="fuel"></td><td class="c n" data-c="rate"></td><td class="c n" data-c="cons"></td><td class="c n" data-c="robL"></td><td class="c n" data-c="robV"></td><td class="c l n" data-c="eta"></td><td class="c l n" data-c="etd"></td>
+<td><div class="act"><button data-a="up" title="Move up">↑</button><button data-a="dn" title="Move down">↓</button><button data-a="dup" title="Duplicate">⧉</button><button data-a="del" class="del" title="Delete">✕</button></div></td></tr>`;
+  });
+  h+=`</tbody><tfoot id="legFoot"></tfoot>`;
+  t.innerHTML=h+`<datalist id="tagList"><option>Always</option>${routeTags(plan.legs).map(x=>`<option>${esc(x)}</option>`).join("")}</datalist>`;
+}
+$("#legTbl").addEventListener("input",e=>{
+  const el=e.target,tr=el.closest("tr[data-i]");if(!tr||!el.dataset.f)return;
+  const l=plan.legs[+tr.dataset.i],f=el.dataset.f;
+  if(f==="bunker"){plan.legs.forEach(x=>x.bunker=false);l.bunker=el.checked;}
+  else l[f]=(f==="dist"||f==="days")?el.value:el.value;
+  if(f==="type"){if(l.type!=="Transit"){l.dist=0;if(l.type==="Port Ops"&&!num(l.days))l.days=1}buildLegs()}
+  if(f==="tag")fillRoute();
+  refresh();
+});
+$("#legTbl").addEventListener("change",e=>{if(e.target.dataset.f==="tag"){buildLegs();refresh()}});
+$("#legTbl").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-a]");if(!b)return;
+  const i=+b.closest("tr").dataset.i,L=plan.legs;
+  if(b.dataset.a==="up"&&i>0)[L[i-1],L[i]]=[L[i],L[i-1]];
+  if(b.dataset.a==="dn"&&i<L.length-1)[L[i+1],L[i]]=[L[i],L[i+1]];
+  if(b.dataset.a==="dup")L.splice(i+1,0,Object.assign({},L[i],{id:uid(),bunker:false}));
+  if(b.dataset.a==="del"){L.splice(i,1)}
+  buildLegs();fillRoute();refresh();
+});
+document.querySelectorAll("[data-add]").forEach(b=>b.addEventListener("click",()=>{
+  const t=b.dataset.add;
+  plan.legs.push({id:uid(),label:"",desc:t==="Transit"?"A → B":t==="Drydock"?"Port — drydock":"Port — cargo ops (at berth)",type:t,zone:"ECA",tag:"Always",dist:0,days:t==="Port Ops"?1:0,bunker:false});
+  buildLegs();refresh();
+  const s=$("#legTbl").parentElement;s.scrollTop=s.scrollHeight;
+}));
+
+/* ---- refresh (all computed output) ---- */
+let C=null;
+function refresh(){
+  C=compute(plan);
+  const I=C.I;
+  $("#uL").textContent=f2(num(I.robL)-num(I.unpL))+" MT";
+  $("#uV").textContent=f2(num(I.robV)-num(I.unpV))+" MT";
+  const bp=C.bunkerRow?portName(C.bunkerRow.leg.desc):null;
+  $("#lab_supL").textContent=`Bunker lift — LSMGO${bp?" at "+bp:""}`;
+  $("#lab_supV").textContent=`Bunker lift — VLSFO${bp?" at "+bp:""}`;
+  const fp=lastPortName(C.last);
+  // route line
+  const ports=[];C.act.forEach(r=>{if(r.leg.type!=="Transit"){const p=portName(r.leg.desc);if(ports[ports.length-1]!==p)ports.push(p+(r.leg.type==="Drydock"?" (DD)":""))}});
+  if(C.last&&C.last.leg.type==="Transit")ports.push(fp);
+  $("#routeLine").textContent=ports.join(" → ")+(I.route?`  ·  via ${I.route}`:"");if(typeof netState==="function")netState();
+  // legs computed cells
+  document.querySelectorAll("#legTbl tr[data-i]").forEach(tr=>{
+    const r=C.rows[+tr.dataset.i];if(!r)return;
+    tr.classList.toggle("inactive",!r.active);
+    const set=(c,v)=>{const el=tr.querySelector(`[data-c="${c}"]`);if(el)el.innerHTML=v};
+    set("active",r.active);set("speed",r.speed==null?"":f1(r.speed));set("days",f2(r.days));
+    set("fuel",`<span class="pill ${r.fuel==="LSMGO"?"L":"V"}">${r.fuel}</span>`);set("rate",f2(r.rate));set("cons",f2(r.cons));
+    set("robL",`<span class="${r.robL<0?"neg":""}">${f2(r.robL)}</span>`);set("robV",`<span class="${r.robV<0?"neg":""}">${f2(r.robV)}</span>`);
+    set("eta",fdt(r.eta));set("etd",fdt(r.etd));
+  });
+  const ft=$("#legFoot");if(ft)ft.innerHTML=`<tr class="total"><td class="l" colspan="5">Totals (active rows)</td><td class="n">${f0(C.dist.eca+C.dist.non)}</td><td colspan="4"></td><td class="n">${f2(C.totalDays)}</td><td></td><td></td><td class="n">${f2(C.sum[0].cons+C.sum[1].cons)}</td><td colspan="5"></td></tr>`;
+  renderKpis(fp);renderCheck(fp,bp);renderSummary();renderPorts();renderChart();renderReq(fp,bp);renderValidation();
+  autosave();
+}
+function renderKpis(fp){
+  const [cL,cV]=C.check,[sL,sV]=C.sum;
+  const sur=x=>`<span class="${x<-0.005?"neg":"pos"}">${x>=0?"+":""}${f2(x)}</span>`;
+  $("#kpis").innerHTML=`
+<div class="kpi"><div class="k">Voyage duration</div><div class="v">${f2(C.totalDays)} d</div><div class="s">${fdt(C.start)} → ${fdt(C.endT)}</div></div>
+<div class="kpi"><div class="k">Distance (active)</div><div class="v">${f0(C.dist.eca+C.dist.non)} nm</div><div class="s">ECA ${f0(C.dist.eca)} · Non-ECA ${f0(C.dist.non)}</div></div>
+<div class="kpi"><div class="k"><span class="dot" style="background:var(--lsmgo)"></span>LSMGO bunkers required</div><div class="v">${f2(sL.req)}</div><div class="s">Voyage burn ${f2(sL.cons)} MT</div></div>
+<div class="kpi"><div class="k"><span class="dot" style="background:var(--vlsfo)"></span>VLSFO bunkers required</div><div class="v">${f2(sV.req)}</div><div class="s">Voyage burn ${f2(sV.cons)} MT</div></div>
+<div class="kpi"><div class="k">Surplus vs margin at ${esc(fp)}</div><div class="v" style="font-size:18px;margin-top:6px">L ${sur(cL.surplus)}<br>V ${sur(cV.surplus)}</div></div>`;
+}
+function renderCheck(fp,bp){
+  $("#checkTbl").innerHTML=`<div class="scroll" style="max-height:none"><table><thead><tr><th class="l">Fuel</th><th>Raw ROB on arrival ${esc(fp)}</th><th>Less unpumpable</th><th>Usable ROB on arrival</th><th>Required margin</th><th>Surplus / (shortfall)</th></tr></thead><tbody>${
+    C.check.map(c=>`<tr><td class="l"><span class="pill ${c.fuel==="LSMGO"?"L":"V"}">${c.fuel}</span></td><td class="n">${f2(c.raw)}</td><td class="n">${f2(c.unp)}</td><td class="n">${f2(c.usable)}</td><td class="n">${f2(c.margin)}</td><td class="n ${c.surplus<-0.005?"neg":"pos"}"><b>${c.surplus<0?"("+f2(-c.surplus)+")":f2(c.surplus)}</b></td></tr>`).join("")}</tbody></table></div>`;
+  const short=C.check.filter(c=>c.surplus<-0.005);
+  let h="";
+  if(!C.bunkerRow)h+=`<div class="status warn"><span class="ic">!</span><div>No bunker row selected — the lift inputs are ignored. Tick “Bunker” on the departure row of the replenishment port in the Legs table.</div></div>`;
+  if(short.length)h+=`<div class="status bad"><span class="ic">✕</span><div><b>Short of safety margin.</b> ${short.map(c=>`${c.fuel}: increase the lift${bp?" at "+esc(bp):""} by at least <b>${f2(-c.surplus)} MT</b>`).join("; ")}.</div></div>`;
+  else h+=`<div class="status good"><span class="ic">✓</span><div>Planned lift leaves at least the safety margin as <b>usable</b> fuel on arrival at ${esc(fp)}. ${C.check.map(c=>`${c.fuel} surplus ${f2(c.surplus)} MT`).join(" · ")}.</div></div>`;
+  $("#checkStatus").innerHTML=h;
+}
+function renderSummary(){
+  const [a,b]=C.sum;
+  const row=(s,l)=>`<tr><td class="l">${l}</td><td class="n">${f2(s.days)}</td><td class="n">${f2(s.cons)}</td><td class="n">${f2(s.margin)}</td><td class="n">${f2(s.tot)}</td><td class="n">${f2(s.rob)}</td><td class="n">${f2(s.unp)}</td><td class="n">${f2(s.usable)}</td><td class="n"><b>${f2(s.req)}</b></td></tr>`;
+  const T=k=>a[k]+b[k];
+  $("#sumTbl").innerHTML=`<table><thead><tr><th class="l">Fuel</th><th>Days</th><th>Voyage cons</th><th>+ Margin</th><th>Total required</th><th>ROB today (raw)</th><th>Less unpumpable</th><th>Usable ROB</th><th>Bunkers required</th></tr></thead><tbody>
+${row(a,`<span class="pill L">LSMGO</span> <span class="note">ECA + port + drydock</span>`)}${row(b,`<span class="pill V">VLSFO</span> <span class="note">Non-ECA transit</span>`)}
+<tr class="total"><td class="l">Total</td><td class="n">${f2(T("days"))}</td><td class="n">${f2(T("cons"))}</td><td class="n">${f2(T("margin"))}</td><td class="n">${f2(T("tot"))}</td><td class="n">${f2(T("rob"))}</td><td class="n">${f2(T("unp"))}</td><td class="n">${f2(T("usable"))}</td><td class="n">${f2(T("req"))}</td></tr></tbody></table>`;
+}
+function portEvents(){
+  const ev=[];
+  C.act.forEach((r,i)=>{
+    if(r.leg.type==="Transit")return;
+    const p=portName(r.leg.desc);
+    const what=r.leg.type==="Drydock"?"drydock":"port stay";
+    ev.push({port:p,ev:i===0?`On arrival / clock start (before ${what})`:`On arrival (before ${what})`,t:r.eta,L:r.robLbefore,V:r.robVbefore,cls:r.leg.type==="Drydock"?"dd":"port"});
+    ev.push({port:p,ev:`On departure (after ${f2(r.days).replace(/\.00$/,"")}-day ${what}${r.leg.bunker?" + bunkers":""})`,t:r.etd,L:r.robL,V:r.robV,cls:r.leg.type==="Drydock"?"dd":"port"});
+  });
+  if(C.last&&C.last.leg.type==="Transit")ev.push({port:lastPortName(C.last),ev:"On arrival (final port)",t:C.last.etd,L:C.last.robL,V:C.last.robV,cls:""});
+  return ev;
+}
+function renderPorts(){
+  const ev=portEvents(),uL=num(C.I.unpL),uV=num(C.I.unpV);
+  $("#portTbl").innerHTML=`<table><thead><tr><th class="l">Port</th><th class="l">Event</th><th class="l">Date / time</th><th>LSMGO ROB</th><th>VLSFO ROB</th></tr></thead><tbody>${
+   ev.map(e=>`<tr class="${e.cls}"><td class="l"><b>${esc(e.port)}</b></td><td class="l">${esc(e.ev)}</td><td class="l n">${fdt(e.t)}</td><td class="n ${e.L<uL?"neg":""}">${f2(e.L)}</td><td class="n ${e.V<uV?"neg":""}">${f2(e.V)}</td></tr>`).join("")}</tbody></table>
+   <p class="note" style="margin:8px 0 0">Physical ROB (includes unpumpable — what soundings will show). Red = at or below unpumpable level, i.e. no usable fuel.</p>`;
+}
+function renderChart(){
+  const W=760,H=260,ml=48,mr=16,mt=12,mb=30;
+  const pts=[{t:C.start,L:num(C.I.robL),V:num(C.I.robV),lab:"Start"}];
+  C.act.forEach(r=>{
+    if(r.leg.bunker){pts.push({t:r.etd,L:r.robL-num(C.I.supL),V:r.robV-num(C.I.supV),lab:(r.leg.desc||"")+" (before lift)"});}
+    pts.push({t:r.etd,L:r.robL,V:r.robV,lab:r.leg.desc||""});
+  });
+  const host=$("#chart");host.querySelector("svg")?.remove();
+  if(pts.length<2||!isFinite(C.start)){host.insertAdjacentHTML("afterbegin",`<p class="note">Add legs and a start time to see the profile.</p>`);return}
+  host.querySelector("p.note")?.remove();
+  const t0=pts[0].t,t1=pts[pts.length-1].t||t0+1;
+  const ymax=Math.max(...pts.map(p=>Math.max(p.L,p.V)),1)*1.08, ymin=Math.min(0,...pts.map(p=>Math.min(p.L,p.V)));
+  const x=t=>ml+(t-t0)/Math.max(1,t1-t0)*(W-ml-mr), y=v=>mt+(ymax-v)/(ymax-ymin)*(H-mt-mb);
+  const step=Math.pow(10,Math.floor(Math.log10(ymax/4)));const tick=[1,2,2.5,5,10].map(m=>m*step).find(s=>ymax/s<=6)||step*10;
+  let g="";for(let v=Math.ceil(ymin/tick)*tick;v<=ymax;v+=tick)g+=`<line x1="${ml}" x2="${W-mr}" y1="${y(v)}" y2="${y(v)}" stroke="#eef1f4"/><text x="${ml-6}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="#7a8794">${f0(v)}</text>`;
+  // port stay shading
+  C.act.forEach(r=>{if(r.leg.type!=="Transit"&&r.days>0)g+=`<rect x="${x(r.eta)}" y="${mt}" width="${Math.max(1,x(r.etd)-x(r.eta))}" height="${H-mt-mb}" fill="${r.leg.type==="Drydock"?"#f3eefa":"#eef3f8"}"/>`});
+  const days=(t1-t0)/86400000, dstep=days>120?30:days>60?14:days>20?7:days>8?2:1;
+  for(let d=0;d<=days;d+=dstep){const t=t0+d*86400000,dd=new Date(t);g+=`<text x="${x(t)}" y="${H-10}" text-anchor="middle" font-size="11" fill="#7a8794">${dd.getUTCDate()} ${MON[dd.getUTCMonth()]}</text>`}
+  const path=k=>pts.map((p,i)=>`${i?"L":"M"}${x(p.t).toFixed(1)},${y(p[k]).toFixed(1)}`).join("");
+  const uL=num(C.I.unpL),uV=num(C.I.unpV);
+  g+=`<line x1="${ml}" x2="${W-mr}" y1="${y(uL)}" y2="${y(uL)}" stroke="#2a78d6" stroke-opacity=".5" stroke-dasharray="4 3"/>`;
+  g+=`<line x1="${ml}" x2="${W-mr}" y1="${y(uV)}" y2="${y(uV)}" stroke="#eb6834" stroke-opacity=".5" stroke-dasharray="4 3"/>`;
+  if(ymin<0)g+=`<line x1="${ml}" x2="${W-mr}" y1="${y(0)}" y2="${y(0)}" stroke="#13202e"/>`;
+  g+=`<path d="${path("L")}" fill="none" stroke="var(--lsmgo)" stroke-width="2" stroke-linejoin="round"/><path d="${path("V")}" fill="none" stroke="var(--vlsfo)" stroke-width="2" stroke-linejoin="round"/>`;
+  const lp=pts[pts.length-1];
+  let yL=y(lp.L)-6,yV=y(lp.V)-6;if(Math.abs(yL-yV)<14){if(lp.L>=lp.V)yV=y(lp.V)+15;else yL=y(lp.L)+15}
+  g+=`<text x="${W-mr-2}" y="${yL}" text-anchor="end" font-size="11" fill="#13202e">LSMGO ${f0(lp.L)}</text><text x="${W-mr-2}" y="${yV}" text-anchor="end" font-size="11" fill="#13202e">VLSFO ${f0(lp.V)}</text>`;
+  g+=`<line id="xh" y1="${mt}" y2="${H-mb}" stroke="#4a5866" stroke-width="1" visibility="hidden"/><circle id="hL" r="4" fill="var(--lsmgo)" stroke="#fff" stroke-width="2" visibility="hidden"/><circle id="hV" r="4" fill="var(--vlsfo)" stroke="#fff" stroke-width="2" visibility="hidden"/>`;
+  g+=`<rect x="${ml}" y="${mt}" width="${W-ml-mr}" height="${H-mt-mb}" fill="transparent" id="hit"/>`;
+  host.insertAdjacentHTML("afterbegin",`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="ROB profile chart">${g}</svg>`);
+  const svg=host.querySelector("svg"),tip=$("#tip");
+  svg.querySelector("#hit").addEventListener("mousemove",e=>{
+    const b=svg.getBoundingClientRect(),sx=(e.clientX-b.left)/b.width*W;
+    let best=pts[0];for(const p of pts)if(Math.abs(x(p.t)-sx)<Math.abs(x(best.t)-sx))best=p;
+    const X=x(best.t);
+    svg.querySelector("#xh").setAttribute("x1",X);svg.querySelector("#xh").setAttribute("x2",X);
+    [["#hL","L"],["#hV","V"]].forEach(([id,k])=>{const c=svg.querySelector(id);c.setAttribute("cx",X);c.setAttribute("cy",y(best[k]));c.setAttribute("visibility","visible")});
+    svg.querySelector("#xh").setAttribute("visibility","visible");
+    tip.innerHTML=`<div style="opacity:.75;margin-bottom:3px">${esc(best.lab)}<br>${fdt(best.t)}</div>LSMGO <b>${f2(best.L)}</b> MT<br>VLSFO <b>${f2(best.V)}</b> MT`;
+    tip.style.display="block";const px=X/W*b.width;tip.style.left=Math.min(px+12,b.width-tip.offsetWidth-4)+"px";tip.style.top="10px";
+  });
+  svg.querySelector("#hit").addEventListener("mouseleave",()=>{tip.style.display="none";["#xh","#hL","#hV"].forEach(i=>svg.querySelector(i).setAttribute("visibility","hidden"))});
+}
+function renderReq(fp,bp){
+  const I=C.I,[sL,sV]=C.sum,[cL,cV]=C.check;
+  $("#reqText").textContent=
+`${plan.vessel||"Vessel"} — Bunker requirement
+Voyage: ${plan.title||""}${I.route?`\nRouting: via ${I.route}`:""}
+Clock start: ${fdt(C.start)} (ship's time)   ETA ${fp}: ${fdt(C.endT)}
+Distance: ${f0(C.dist.eca+C.dist.non)} nm (ECA ${f0(C.dist.eca)} / Non-ECA ${f0(C.dist.non)})
+
+Speeds: ECA ${I.spdECA} kn / Non-ECA ${I.spdNon} kn
+Rates: LSMGO ECA ${I.rECA} · VLSFO ${I.rNon} · Port ${I.rPort} · Drydock ${I.rDD} MT/day
+
+                     LSMGO      VLSFO
+Voyage consumption ${f2(sL.cons).padStart(9)}  ${f2(sV.cons).padStart(9)}
+Safety margin      ${f2(sL.margin).padStart(9)}  ${f2(sV.margin).padStart(9)}   (${I.mL} d / ${I.mV} d)
+ROB today (raw)    ${f2(sL.rob).padStart(9)}  ${f2(sV.rob).padStart(9)}
+Unpumpable         ${f2(sL.unp).padStart(9)}  ${f2(sV.unp).padStart(9)}
+BUNKERS REQUIRED   ${f2(sL.req).padStart(9)}  ${f2(sV.req).padStart(9)}
+
+Planned lift${bp?" at "+bp:""}: LSMGO ${f2(num(I.supL))} MT / VLSFO ${f2(num(I.supV))} MT
+Usable ROB on arrival ${fp}: LSMGO ${f2(cL.usable)} / VLSFO ${f2(cV.usable)} MT
+Surplus/(shortfall) vs margin: LSMGO ${f2(cL.surplus)} / VLSFO ${f2(cV.surplus)} MT`;
+}
+
+/* ---- validation (spec §7) ---- */
+function renderValidation(){
+  const items=[];
+  const bad=C.rows.some(r=>!isFinite(r.days)||!isFinite(r.cons)||!isFinite(r.robL)||!isFinite(r.robV))||!isFinite(C.start);
+  items.push(bad?["bad","Calculation errors","A speed is zero/blank or the start date/time is missing — some rows cannot be calculated."]:["good","Zero calculation errors","Every row computes."]);
+  // distances
+  const tags=routeTags(plan.legs),variants=tags.length?tags:[""];
+  const mism=[];let checked=0;
+  variants.forEach(t=>{const c=compute(plan,{route:t}),pp=(plan.pp||{})[t||"Default"]||{};
+    ["eca","non"].forEach(k=>{if(pp[k]!==""&&pp[k]!=null&&isFinite(parseFloat(pp[k]))){checked++;if(Math.abs(c.dist[k]-num(pp[k]))>0.5)mism.push(`${t||"Default"} ${k==="eca"?"ECA":"Non-ECA"}: legs ${f0(c.dist[k])} vs plan ${f0(num(pp[k]))}`)}})});
+  items.push(mism.length?["bad","Distance cross-check failed",mism.join(" · ")+" — a leg is mis-tagged or missing."]:checked?["good","Distances match passage plan",`${checked} total(s) checked across ${variants.length} route variant(s).`]:["warn","Distances not cross-checked","Enter passage-plan totals in the panel on the right."]);
+  // timeline
+  const back=C.act.filter(r=>r.days<0);
+  const zeroPort=C.act.filter(r=>r.leg.type!=="Transit"&&r.days===0);
+  items.push(back.length?["bad","Timeline runs backwards",back.map(r=>r.leg.desc).join(", ")+" has negative days."]:zeroPort.length?["warn","Timeline runs forward — check zero-day stays",zeroPort.map(r=>r.leg.desc).join(", ")+" adds 0 days."]:["good","Timeline runs strictly forward",`${fdt(C.start)} → ${fdt(C.endT)}; every port stay and drydock adds its days.`]);
+  // ROB
+  const bi=C.bunkerRow?C.rows.indexOf(C.bunkerRow):-1;
+  const negs=[],dips=[];
+  C.rows.forEach((r,i)=>{if(!r.active)return;
+    if(r.robL<0||r.robV<0)negs.push(`${r.leg.desc} (${r.robL<0?"LSMGO "+f2(r.robL):""}${r.robL<0&&r.robV<0?", ":""}${r.robV<0?"VLSFO "+f2(r.robV):""})`);
+    else if((r.robL<num(C.I.unpL)||r.robV<num(C.I.unpV)))dips.push(r.leg.desc);
+  });
+  items.push(negs.length?["bad","ROB goes negative",`Vessel would run out: ${negs.join("; ")}.${bi>=0?"":" No bunker row is set."}`]:dips.length?["warn","ROB dips into unpumpable",`Usable fuel exhausted at: ${dips.join("; ")}.`]:["good","ROB never goes negative","Physical ROB stays above zero and above the unpumpable level on every active row."]);
+  // check the check
+
+  const cc=compute(plan,{supL:C.bunkerRow?num(C.I.supL)-C.check[0].surplus:0,supV:C.bunkerRow?num(C.I.supV)-C.check[1].surplus:0});
+  const ok=C.bunkerRow&&Math.abs(cc.check[0].surplus)<0.01&&Math.abs(cc.check[1].surplus)<0.01;
+  items.push(!C.bunkerRow?["warn","Bunker check not testable","No bunker row selected."]:ok?["good","Check the check","Setting the lift to the calculated requirement gives surplus ≈ 0 for both fuels."]:["bad","Check the check failed","Surplus does not return to 0 at the calculated lift."]);
+  // placeholders
+  items.push(["warn","Confirm placeholders","In-port genset rate, drydock duration and drydock rate should be confirmed against vessel/yard figures."]);
+  // bunker row placement
+  if(C.bunkerRow&&C.bunkerRow.leg.type==="Transit")items.push(["warn","Bunker lift on a transit row","The lift is usually placed on the departure (port stay) row of the replenishment port."]);
+  $("#vlist").innerHTML=items.map(([s,t,d])=>`<li><span class="ic ${s}">${s==="good"?"✓":s==="warn"?"!":"✕"}</span><div><div class="t">${esc(t)}</div><div class="d">${esc(d)}</div></div></li>`).join("");
+  const nb=items.filter(i=>i[0]==="bad").length,b=$("#vBadge");b.textContent=nb||"✓";b.classList.toggle("ok",!nb);
+  // pp grid
+  if(document.activeElement?.closest?.("#ppGrid"))return;
+  let h=`<div class="h">Route variant</div><div class="h n">Legs ECA</div><div class="h n">Plan ECA</div><div class="h n">Legs Non-ECA</div><div class="h n">Plan Non-ECA</div>`;
+  variants.forEach(t=>{const c=compute(plan,{route:t}),key=t||"Default",pp=(plan.pp||{})[key]||{};
+    h+=`<div><b>${esc(key)}</b></div><div class="n">${f0(c.dist.eca)}</div><div><input class="y" type="number" data-pp="${esc(key)}" data-k="eca" value="${esc(pp.eca??"")}"></div><div class="n">${f0(c.dist.non)}</div><div><input class="y" type="number" data-pp="${esc(key)}" data-k="non" value="${esc(pp.non??"")}"></div>`});
+  $("#ppGrid").innerHTML=h;
+}
+$("#ppGrid").addEventListener("input",e=>{const el=e.target;if(!el.dataset.pp)return;plan.pp=plan.pp||{};plan.pp[el.dataset.pp]=plan.pp[el.dataset.pp]||{};plan.pp[el.dataset.pp][el.dataset.k]=el.value;refresh()});
+
+/* ---- actions ---- */
+$("#bSolve").addEventListener("click",()=>{
+  if(!C.bunkerRow){toast("Tick a bunker row in the Legs table first");return}
+  plan.inputs.supL=R2(Math.max(0,num(plan.inputs.supL)-C.check[0].surplus));
+  plan.inputs.supV=R2(Math.max(0,num(plan.inputs.supV)-C.check[1].surplus));
+  fillInputs();refresh();toast("Lift set to exact requirement");
+});
+$("#voyTitle").addEventListener("input",e=>{plan.title=e.target.value;autosave()});
+$("#vesselIn").addEventListener("input",e=>{plan.vessel=e.target.value;document.title=(plan.vessel?plan.vessel+" — ":"")+"Voyage Fuel & ROB Planner";renderReq(lastPortName(C.last),C.bunkerRow?portName(C.bunkerRow.leg.desc):null);autosave()});
+document.querySelectorAll("#tabs button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("on",x===b));
+  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("on",v.id==="v-"+b.dataset.v));
+  if(b.dataset.v==="builder")loadSR().catch(()=>{});
+}));
+async function copy(text,msg){try{await navigator.clipboard.writeText(text);toast(msg||"Copied")}catch(e){openModal(`<h3>Copy</h3><textarea readonly>${esc(text)}</textarea><div class="row"><button class="btn" onclick="closeModal()">Close</button></div>`)}}
+$("#bCopyReq").addEventListener("click",()=>copy($("#reqText").textContent,"Requisition text copied"));
+function openModal(h){$("#modalBody").innerHTML=h;$("#modal").style.display="flex"}
+function closeModal(){$("#modal").style.display="none"}
+$("#modal").addEventListener("click",e=>{if(e.target.id==="modal")closeModal()});
+
+function csv(){
+  const q=v=>{v=String(v??"");return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v};
+  const L=[["Leg","Description","Type","Zone","Route tag","Distance nm","Active","Speed kn","Days","Fuel","Rate MT/d","Consumption MT","LSMGO ROB after","VLSFO ROB after","ETA","ETD","Bunker row"]];
+  C.rows.forEach(r=>L.push([r.leg.label,r.leg.desc,r.leg.type,r.leg.type==="Transit"?r.leg.zone:"Port",r.leg.tag,r.leg.dist,r.active,r.speed??"",R2(r.days),r.fuel,r.rate,R2(r.cons),R2(r.robL),R2(r.robV),fdt(r.eta),fdt(r.etd),r.leg.bunker?"Y":""]));
+  L.push([]);L.push(["Summary","Days","Voyage cons","Margin","Total required","ROB today","Unpumpable","Usable","Bunkers required"]);
+  C.sum.forEach(s=>L.push([s.fuel,R2(s.days),R2(s.cons),R2(s.margin),R2(s.tot),s.rob,s.unp,R2(s.usable),R2(s.req)]));
+  L.push([]);L.push(["Bunker check","Raw ROB arrival","Unpumpable","Usable arrival","Margin","Surplus/(shortfall)"]);
+  C.check.forEach(c=>L.push([c.fuel,R2(c.raw),c.unp,R2(c.usable),R2(c.margin),R2(c.surplus)]));
+  return L.map(r=>r.map(q).join(",")).join("\n");
+}
+const fname=ext=>(plan.vessel||"voyage").replace(/[^\w]+/g,"_")+"_"+(plan.inputs.start||"").slice(0,10)+"."+ext;
+async function download(name,data){
+  if(!dlNS){copy(data,"Downloads unavailable here — copied to clipboard instead");return}
+  try{await dlNS.save({filename:name,data});closeModal()}catch(e){if(e?.code!=="declined")toast("Download not available: "+(e?.code||"error"))}
+}
+$("#bExport").addEventListener("click",()=>openModal(`<h3>Export</h3>
+<p class="note">CSV opens in Excel with the full leg table, summary and bunker check. JSON is the voyage file you can import later or share with another officer.</p>
+<div class="toolbar"><button class="btn pri" id="xCsv">Download CSV</button><button class="btn" id="xJson">Download voyage file (.json)</button><button class="btn" id="xCopy">Copy voyage JSON</button><button class="btn" onclick="window.print?.()">Print</button></div>
+<div class="row"><button class="btn" onclick="closeModal()">Close</button></div>`)||wireExport());
+function wireExport(){
+  $("#xCsv").onclick=()=>download(fname("csv"),csv());
+  $("#xJson").onclick=()=>download(fname("json"),JSON.stringify(plan,null,2));
+  $("#xCopy").onclick=()=>copy(JSON.stringify(plan),"Voyage JSON copied");
+}
+$("#bImport").addEventListener("click",()=>{openModal(`<h3>Import voyage</h3><p class="note">Choose a voyage .json file, or paste its contents.</p><input type="file" accept=".json,application/json" id="impFile"><textarea id="impTxt" placeholder="…or paste voyage JSON here" style="margin-top:10px"></textarea><div class="row"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn pri" id="impGo">Import</button></div>`);
+  $("#impFile").onchange=async e=>{const f=e.target.files[0];if(f)$("#impTxt").value=await f.text()};
+  $("#impGo").onclick=()=>{try{const p=JSON.parse($("#impTxt").value);if(!p.inputs||!Array.isArray(p.legs))throw 0;p.legs.forEach(l=>l.id=l.id||uid());recordNow();loadPlan(p,null);savedSnap=null;closeModal();toast("Voyage imported")}catch(e){toast("That isn't a valid voyage file")}};
+});
+$("#bNew").addEventListener("click",()=>(setTimeout(()=>{const i=$("#nvShip");if(i)i.value=plan.vessel||""},0),openModal(`<h3>New voyage</h3><p class="note">Keeps the ship name and its rates, speeds, margins and unpumpable figures; clears the legs so you can enter the new voyage.</p><label class="note" for="nvShip" style="display:block;margin-top:8px">Ship name</label><input class="y" id="nvShip" style="text-align:left;font-family:inherit" placeholder="e.g. M.V. …"><div class="row"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn pri" id="newGo">Start new voyage</button></div>`)||($("#newGo").onclick=()=>{
+  const p=JSON.parse(JSON.stringify(plan));p.title="New voyage";p.vessel=($("#nvShip")?.value||"").trim()||p.vessel||"";p.pp={};p.inputs.route="";p.inputs.supL=0;p.inputs.supV=0;
+  p.builder=Object.assign({},p.builder||defaultBuilder(),{stops:[{name:"",lat:NaN,lon:NaN,role:"port",days:3,bunker:true},{name:"",lat:NaN,lon:NaN,role:"port",days:0}]});
+  p.legs=[{id:uid(),label:"",desc:"Load port — cargo ops (at berth)",type:"Port Ops",zone:"ECA",tag:"Always",dist:0,days:3,bunker:true},{id:uid(),label:"1",desc:"Load port → Disch port",type:"Transit",zone:"ECA",tag:"Always",dist:0,days:0,bunker:false}];
+  recordNow();loadPlan(p,null);savedSnap=null;closeModal();document.querySelector('#tabs [data-v="builder"]').click();
+})));
+$("#bLoadSample").addEventListener("click",()=>{recordNow();const v=plan.vessel;const sp=sampleVoyage();if(v)sp.vessel=v;loadPlan(sp,null);savedSnap=null;toast("Sample voyage loaded");document.querySelector('#tabs [data-v="plan"]').click()});
+
+
+/* ---- route builder (searoute) ---- */
+let srReady=null, lastRoute=null;
+function loadSR(){
+  if(srReady)return srReady;
+  srReady=new Promise((res,rej)=>{if(window.SR)return res(window.SR);const s=document.createElement("script");s.src="sr.js";s.onload=()=>window.SR?res(window.SR):rej(new Error("engine missing"));s.onerror=()=>{srReady=null;rej(new Error("Couldn't load the routing engine — check the connection and try again"))};document.head.appendChild(s)});
+  srReady.then(sr=>{$("#portList").innerHTML=sr.ports.map(p=>`<option value="${esc(p.name+(p.country?" — "+p.country:"")+(p.code&&!p.code.startsWith("WP-")?" ("+p.code+")":""))}">`).join("")}).catch(()=>{});
+  return srReady;
+}
+function parseCoord(s,isLat){
+  s=String(s??"").trim().toUpperCase();if(!s)return NaN;
+  const hemi=(s.match(/[NSEW]/)||[""])[0];const neg=/^-/.test(s)||hemi==="S"||hemi==="W";
+  const n=(s.match(/\d+(\.\d+)?/g)||[]).map(Number);if(!n.length)return NaN;
+  let v=n[0]+(n[1]||0)/60+(n[2]||0)/3600;v=neg?-v:v;
+  if(isLat?Math.abs(v)>90:Math.abs(v)>180)return NaN;return v;
+}
+const fmtLL=(v,isLat)=>Number.isFinite(v)?(Math.abs(v).toFixed(4)+"°"+(isLat?(v<0?"S":"N"):(v<0?"W":"E"))):"";
+function B(){if(!plan.builder)plan.builder=defaultBuilder();return plan.builder}
+function fillOpts(){const b=B();$("#o_draft").value=b.draft??"";$("#o_allow").value=b.allow??"";$("#o_merge").value=b.merge??"";$("#o_suez").checked=!!b.avoidSuez;$("#o_pan").checked=!!b.avoidPanama}
+[["o_draft","draft"],["o_allow","allow"],["o_merge","merge"]].forEach(([id,k])=>$("#"+id).addEventListener("input",e=>{B()[k]=e.target.value;autosave()}));
+$("#o_suez").addEventListener("change",e=>{B().avoidSuez=e.target.checked;autosave()});
+$("#o_pan").addEventListener("change",e=>{B().avoidPanama=e.target.checked;autosave()});
+const ROLES=[["port","Port stay"],["drydock","Drydock"],["break","Leg break"],["via","Route via"]];
+function buildStops(){
+  const st=B().stops,last=st.length-1;
+  $("#stopTbl").innerHTML=`<thead><tr><th class="l">#</th><th class="l">Port / point</th><th class="l">Latitude</th><th class="l">Longitude</th><th class="l">Role</th><th>Stay (days)</th><th>Bunker here</th><th></th></tr></thead><tbody>${st.map((s,i)=>`<tr data-s="${i}">
+<td class="l n">${i+1}</td>
+<td><input class="pt" list="portList" data-g="name" value="${esc(s.name)}" placeholder="Search port or type a name"></td>
+<td><input class="co" data-g="lat" value="${esc(fmtLL(s.lat,true))}" placeholder="48 18.0N"></td>
+<td><input class="co" data-g="lon" value="${esc(fmtLL(s.lon,false))}" placeholder="069 24.0W"></td>
+<td>${i===last?`<span class="note">${i===0?"start":"final port"}</span>`:i===0?`<select data-g="role">${ROLES.filter(r=>r[0]!=="via").map(r=>`<option value="${r[0]}" ${r[0]===s.role?"selected":""}>${r[1]}</option>`).join("")}</select>`:`<select data-g="role">${ROLES.map(r=>`<option value="${r[0]}" ${r[0]===s.role?"selected":""}>${r[1]}</option>`).join("")}</select>`}</td>
+<td>${i!==last&&s.role==="port"?`<input class="dy" type="number" step="any" data-g="days" value="${esc(s.days)}">`:i!==last&&s.role==="drydock"?`<span class="note">from inputs</span>`:""}</td>
+<td style="text-align:center">${i!==last&&s.role==="port"?`<input type="radio" name="sbunk" data-g="bunker" ${s.bunker?"checked":""} style="width:auto" aria-label="Bunker here">`:""}</td>
+<td><div class="act legs" style="display:flex;gap:2px"><button data-sa="up" title="Move up">↑</button><button data-sa="dn" title="Move down">↓</button><button data-sa="del" class="del" title="Delete">✕</button></div></td></tr>`).join("")}</tbody>`;
+  $("#stopTbl").querySelectorAll(".act button").forEach(b=>{b.style.cssText="border:1px solid var(--line);background:#fff;border-radius:4px;width:26px;height:26px;cursor:pointer;padding:0"});
+}
+$("#stopTbl").addEventListener("change",e=>{
+  const el=e.target,tr=el.closest("tr[data-s]");if(!tr)return;const s=B().stops[+tr.dataset.s],g=el.dataset.g;
+  if(g==="name"){s.name=el.value;const sr=window.SR;if(sr){const p=sr.ports.find(p=>el.value===p.name+(p.country?" — "+p.country:"")+(p.code&&!p.code.startsWith("WP-")?" ("+p.code+")":""));if(p){s.lat=p.lat;s.lon=p.lon;buildStops()}}}
+  else if(g==="lat"||g==="lon"){const v=parseCoord(el.value,g==="lat");s[g]=v;el.value=isFinite(v)?fmtLL(v,g==="lat"):el.value;el.style.outline=isFinite(v)?"":"2px solid var(--bad)"}
+  else if(g==="role"){s.role=el.value;if(s.role!=="port")s.bunker=false;if(s.role==="port"&&!num(s.days))s.days=1;buildStops()}
+  else if(g==="days")s.days=el.value;
+  else if(g==="bunker"){B().stops.forEach(x=>x.bunker=false);s.bunker=el.checked}
+  autosave();
+});
+$("#stopTbl").addEventListener("click",e=>{const b=e.target.closest("button[data-sa]");if(!b)return;const i=+b.closest("tr").dataset.s,S=B().stops;
+  if(b.dataset.sa==="up"&&i>0)[S[i-1],S[i]]=[S[i],S[i-1]];if(b.dataset.sa==="dn"&&i<S.length-1)[S[i+1],S[i]]=[S[i],S[i+1]];if(b.dataset.sa==="del"&&S.length>2)S.splice(i,1);buildStops();autosave()});
+$("#bAddStop").addEventListener("click",()=>{B().stops.push({name:"",lat:NaN,lon:NaN,role:"port",days:1,bunker:false});buildStops();autosave()});
+const shortName=n=>(n||"").replace(/\s*[—–-]\s*[^—–-]*\([A-Z]{5}\)\s*$/,"").replace(/\s*\([A-Z]{5}\)\s*$/,"").trim()||"—";
+
+async function calcRoute(){
+  const b=B(),S=b.stops,msg=$("#routeMsg");
+  const bad=S.findIndex(s=>!Number.isFinite(s.lat)||!Number.isFinite(s.lon));
+  if(S.length<2){msg.textContent="Add at least two ports.";return}
+  if(bad>=0){msg.textContent=`Point ${bad+1} needs a valid latitude and longitude.`;return}
+  msg.textContent="Loading routing engine…";$("#bRoute").disabled=true;
+  let sr;try{sr=await loadSR()}catch(e){msg.textContent=e.message;$("#bRoute").disabled=false;return}
+  msg.textContent="Calculating route…";await new Promise(r=>setTimeout(r,30));
+  const opt={draft:num(b.draft),avoidSuez:b.avoidSuez,avoidPanama:b.avoidPanama,mergeNm:num(b.merge)};
+  const allow=1+num(b.allow)/100;
+  try{
+    // group stops into passages between "boundary" stops (anything but Route via)
+    const passages=[];let cur=null;const warns=[];
+    for(let i=1;i<S.length;i++){
+      const a=S[i-1],z=S[i];const r=sr.routeLeg([a.lon,a.lat],[z.lon,z.lat],opt);
+      if(r.snapA>15)warns.push(`${shortName(a.name)} is ${f0(r.snapA)} nm from the route network; the leg starts from the nearest network point.`);
+      if(r.snapB>15)warns.push(`${shortName(z.name)} is ${f0(r.snapB)} nm from the route network; the leg ends at the nearest network point.`);
+      if(!cur){cur={from:a,to:z,coords:r.coords.slice(),passages:new Set(r.passages)};passages.push(cur)}else{cur.to=z;cur.coords=cur.coords.concat(r.coords.slice(1));r.passages.forEach(p=>cur.passages.add(p))}
+      if(z.role!=="via"||i===S.length-1)cur=null;
+    }
+    const legs=[];let n=0,allRuns=[];
+    const stopRow=s=>s.role==="port"?{type:"Port Ops",desc:`${shortName(s.name)} — port stay`,days:num(s.days),bunker:!!s.bunker}:s.role==="drydock"?{type:"Drydock",desc:`${shortName(s.name)} — drydock`,days:0,bunker:false}:null;
+    const first=stopRow(S[0]);if(first)legs.push(first);
+    passages.forEach(P=>{
+      n++;const runs=sr.splitCoords(P.coords,opt.mergeNm);allRuns=allRuns.concat(runs);
+      const A=shortName(P.from.name),Z=shortName(P.to.name);
+      runs.forEach((r,k)=>{
+        const fromL=k===0?A:(runs[k-1].zone==="ECA"?"ECA exit":"ECA entry");
+        const toL=k===runs.length-1?Z:(r.zone==="ECA"?"ECA exit":"ECA entry");
+        legs.push({type:"Transit",label:runs.length>1?n+"abcdefghijklmnop"[k]:String(n),desc:`${fromL} → ${toL}`,zone:r.zone,raw:r.nm,dist:Math.round(r.nm*allow),names:r.names,via:k===0?[...P.passages]:[]});
+      });
+      const sr2=P.to===S[S.length-1]?null:stopRow(P.to);if(sr2)legs.push(sr2);
+    });
+    if(!S.some(s=>s.bunker))warns.push("No bunker port ticked, so the lift won't be applied. Tick “Bunker here” on a port stay.");
+    lastRoute={legs,runs:allRuns,stops:S.map(s=>({...s}))};
+    renderRoute(warns);msg.textContent="";
+  }catch(e){msg.textContent="Route failed: "+(e?.message||e)}
+  $("#bRoute").disabled=false;
+}
+$("#bRoute").addEventListener("click",calcRoute);
+function renderRoute(warns){
+  const L=lastRoute.legs,T=L.filter(l=>l.type==="Transit");
+  const tot=z=>T.filter(l=>!z||l.zone===z).reduce((s,l)=>s+l.dist,0),raw=T.reduce((s,l)=>s+l.raw,0);
+  $("#rLegs").innerHTML=`<table><thead><tr><th class="l">Leg</th><th class="l">Description</th><th class="l">Zone</th><th>searoute nm</th><th>+ allowance nm</th></tr></thead><tbody>${L.map(l=>l.type==="Transit"?`<tr><td class="l">${esc(l.label)}</td><td class="l">${esc(l.desc)}</td><td class="l"><span class="pill ${l.zone==="ECA"?"L":"V"}">${l.zone}</span>${l.names&&l.names.length?` <span class="note">${esc(l.names.join(", "))}</span>`:""}</td><td class="n">${f0(l.raw)}</td><td class="n"><b>${f0(l.dist)}</b></td></tr>`:`<tr class="${l.type==="Drydock"?"dd":"port"}"><td></td><td class="l">${esc(l.desc)}${l.bunker?" · bunkers":""}</td><td class="l note">${l.type}</td><td class="n" colspan="2">${l.type==="Port Ops"?f2(l.days)+" d":"drydock days from inputs"}</td></tr>`).join("")}
+<tr class="total"><td></td><td class="l">Total: ECA ${f0(tot("ECA"))} · Non-ECA ${f0(tot("Non-ECA"))}</td><td class="l note">${(()=>{const v=[...new Set(L.flatMap(l=>l.via||[]))];return v.length?"Transits: "+esc(v.map(x=>x[0].toUpperCase()+x.slice(1)).join(", ")):""})()}</td><td class="n">${f0(raw)}</td><td class="n">${f0(tot())}</td></tr></tbody></table>`;
+  warns=[...new Set(warns.map(w=>w.replace(/; the leg (starts from|ends at) the nearest network point\./,"; that end of the leg uses the nearest network point.")))];
+  $("#rWarn").innerHTML=warns.length?`<div class="warnbox">${warns.map(esc).join("<br>")}</div>`:"";
+  $("#routeOut").style.display="block";drawRouteMap();
+}
+function drawRouteMap(){
+  const sr=window.SR;if(!sr||!lastRoute)return;
+  const all=lastRoute.runs.flatMap(r=>r.pts);if(!all.length)return;
+  let x0=Math.min(...all.map(p=>p[0])),x1=Math.max(...all.map(p=>p[0])),y0=Math.min(...all.map(p=>p[1])),y1=Math.max(...all.map(p=>p[1]));
+  const pad=Math.max(2,(x1-x0)*.06,(y1-y0)*.1);x0-=pad;x1+=pad;y0-=pad;y1+=pad;
+  const ky=1/Math.cos(((y0+y1)/2)*Math.PI/180);const W=1000,H=Math.max(300,Math.min(700,W*(y1-y0)*ky/(x1-x0)));
+  const sx=W/(x1-x0),sy=H/(y1-y0);
+  const X=x=>((x-x0)*sx).toFixed(1),Y=y=>((y1-y)*sy).toFixed(1);
+  let land="";
+  for(const f of sr.land.features){const polys=f.geometry.type==="Polygon"?[f.geometry.coordinates]:f.geometry.coordinates;
+    for(const p of polys){const r=p[0];let a=1e9,b=-1e9,c=1e9,d=-1e9;for(const q of r){a=Math.min(a,q[0]);b=Math.max(b,q[0]);c=Math.min(c,q[1]);d=Math.max(d,q[1])}if(b<x0||a>x1||d<y0||c>y1)continue;land+=`<path d="${p.map(ring=>"M"+ring.map(q=>X(q[0])+","+Y(q[1])).join("L")+"Z").join("")}"/>`}}
+  const lines=lastRoute.runs.map(r=>`<path d="M${r.pts.map(q=>X(q[0])+","+Y(q[1])).join("L")}" fill="none" stroke="${r.zone==="ECA"?"#2a78d6":"#eb6834"}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`).join("");
+  const placed=[];
+  const marks=lastRoute.stops.map(s=>{const cx=+X(s.lon),cy=+Y(s.lat);const via=s.role==="via"||s.role==="break";const t=shortName(s.name),w=t.length*6.6+4,hh=14;
+    const cands=[[cx+7,cy-6,"start"],[cx+7,cy+16,"start"],[cx-7,cy-6,"end"],[cx-7,cy+16,"end"],[cx+7,cy+30,"start"],[cx-7,cy-20,"end"]];
+    let pick=cands.find(([x,y,a])=>{const x0=a==="end"?x-w:x;if(x0<0||x0+w>W||y-hh<0||y>H)return false;return !placed.some(b=>x0<b[0]+b[2]&&x0+w>b[0]&&y-hh<b[1]+b[3]&&y>b[1])})||cands[0];
+    const x0=pick[2]==="end"?pick[0]-w:pick[0];placed.push([x0,pick[1]-hh,w,hh]);
+    return `<circle cx="${cx}" cy="${cy}" r="${via?3:4.5}" fill="${via?"#fff":"#13202e"}" stroke="#13202e" stroke-width="1.5"/><text x="${pick[0]}" y="${pick[1]}" text-anchor="${pick[2]}" font-size="12" fill="#13202e" stroke="#eaf2f8" stroke-width="3" paint-order="stroke">${esc(t)}</text>`}).join("");
+  $("#rmap").innerHTML=`<svg viewBox="0 0 ${W} ${H.toFixed(0)}" role="img" aria-label="Route map"><g fill="#d9dccf" stroke="#b9bdac" stroke-width=".5">${land}</g>${lines}${marks}</svg><p class="note" style="margin:6px 0 0">Coarse coastline (1:110m); route shown along the searoute network.</p>`;
+}
+$("#bApplyRoute").addEventListener("click",()=>{
+  if(!lastRoute)return;
+  recordNow();
+  plan.legs=lastRoute.legs.map(l=>({id:uid(),label:l.label||"",desc:l.desc,type:l.type,zone:l.type==="Transit"?l.zone:"ECA",tag:"Always",dist:l.type==="Transit"?l.dist:0,days:l.type==="Port Ops"?l.days:0,bunker:!!l.bunker}));
+  if(!plan.legs.some(l=>l.bunker)){const i=plan.legs.findIndex(l=>l.type==="Port Ops");if(i>=0&&lastRoute.stops.some(s=>s.bunker))plan.legs[i].bunker=true}
+  plan.pp={};plan.inputs.route="";
+  const names=lastRoute.stops.filter(s=>s.role==="port"||s.role==="drydock"||s===lastRoute.stops[lastRoute.stops.length-1]).map(s=>shortName(s.name)+(s.role==="drydock"?" (drydock)":""));
+  if(!plan.title||plan.title==="New voyage")plan.title=names.join(" → ");
+  buildLegs();fillInputs();refresh();
+  document.querySelector('#tabs [data-v="legs"]').click();toast("Legs built from route. Check the ECA tags and distances");
+});
+
+
+/* ---- undo / redo / reset ---- */
+let hist=[],hi=-1,histT=null,restoring=false,savedSnap=null;
+function snap(){return JSON.stringify(plan)}
+function recordHistory(){
+  if(restoring)return;clearTimeout(histT);
+  histT=setTimeout(()=>{const s=snap();if(hist[hi]===s)return;hist=hist.slice(0,hi+1);hist.push(s);if(hist.length>60)hist.shift();hi=hist.length-1;updUndo()},500);
+}
+function recordNow(){clearTimeout(histT);const s=snap();if(hist[hi]!==s){hist=hist.slice(0,hi+1);hist.push(s);if(hist.length>60)hist.shift();hi=hist.length-1}updUndo()}
+function updUndo(){$("#bUndo").disabled=hi<=0;$("#bRedo").disabled=hi>=hist.length-1}
+function restore(s,msg){restoring=true;const keepTab=document.querySelector("#tabs button.on")?.dataset.v;loadPlan(JSON.parse(s),savedId);restoring=false;updUndo();if(msg)toast(msg)}
+function undo(){recordNow();if(hi<=0)return;hi--;restore(hist[hi],"Undone")}
+function redo(){if(hi>=hist.length-1)return;hi++;restore(hist[hi],"Redone")}
+$("#bUndo").addEventListener("click",undo);$("#bRedo").addEventListener("click",redo);
+document.addEventListener("keydown",e=>{if(!(e.ctrlKey||e.metaKey))return;const k=e.key.toLowerCase();
+  if(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)&&k==="z"&&!e.shiftKey){} // let fields handle their own typing undo first? no — app-level undo is more useful
+  if(k==="z"&&!e.shiftKey){e.preventDefault();undo()}else if(k==="y"||(k==="z"&&e.shiftKey)){e.preventDefault();redo()}});
+$("#bReset").addEventListener("click",()=>{
+  openModal(`<h3>Reset</h3><p class="note" style="margin-top:0">Any reset can be reversed with Undo.</p>
+<button class="reset-opt" id="rsSaved" ${savedSnap?"":"disabled"}><b>Revert to last saved version</b><span>${savedSnap?"Discard changes since you last saved or opened this voyage.":"This voyage hasn't been saved yet."}</span></button>
+<button class="reset-opt" id="rsBuilder"><b>Clear the route builder</b><span>Empties the port rotation and proposed legs. The Legs table and inputs are kept.</span></button>
+<button class="reset-opt" id="rsLegs"><b>Clear the legs table</b><span>Removes all legs so you can start the rotation again. Inputs (rates, ROB, margins) are kept.</span></button>
+<button class="reset-opt" id="rsSample"><b>Start over with the sample voyage</b><span>Replaces everything with the Sorel → Istanbul example. Your ship name is kept.</span></button>
+<div class="row"><button class="btn" onclick="closeModal()">Cancel</button></div>`);
+  $("#rsSaved").onclick=()=>{recordNow();restoring=true;loadPlan(JSON.parse(savedSnap),savedId);restoring=false;recordNow();closeModal();toast("Reverted to last saved version")};
+  $("#rsBuilder").onclick=()=>{recordNow();B().stops=[{name:"",lat:NaN,lon:NaN,role:"port",days:3,bunker:true},{name:"",lat:NaN,lon:NaN,role:"port",days:0}];lastRoute=null;$("#routeOut").style.display="none";buildStops();autosave();recordNow();closeModal();document.querySelector('#tabs [data-v="builder"]').click();toast("Route builder cleared")};
+  $("#rsLegs").onclick=()=>{recordNow();plan.legs=[];plan.pp={};plan.inputs.route="";buildLegs();fillRoute();refresh();recordNow();closeModal();toast("Legs table cleared")};
+  $("#rsSample").onclick=()=>{recordNow();restoring=true;const v=plan.vessel;const sp=sampleVoyage();if(v)sp.vessel=v;loadPlan(sp,null);restoring=false;savedSnap=null;recordNow();closeModal();document.querySelector('#tabs [data-v="plan"]').click();toast("Sample voyage loaded")};
+});
+
+/* ---- device storage (this app keeps all data on this device) ---- */
+const SKEY="vfp_saved_v1";
+function readSaved(){try{return JSON.parse(localStorage.getItem(SKEY)||"{}")||{}}catch(e){return {}}}
+function writeSaved(o){localStorage.setItem(SKEY,JSON.stringify(o))}
+const localDb={collection:()=>({
+  get:async()=>{const o=readSaved();return {docs:Object.entries(o).map(([id,v])=>({id,exists:true,data:()=>v}))}},
+  doc:id=>({set:async d=>{const o=readSaved();o[id]=d;try{writeSaved(o)}catch(e){throw {code:"quota_exceeded"}}},delete:async()=>{const o=readSaved();delete o[id];writeSaved(o)}})
+})};
+const localDownloads={save:async({filename,data})=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([data],{type:filename.endsWith(".csv")?"text/csv":"application/json"}));a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);return {status:"saved"}}};
+$("#bBackup").addEventListener("click",()=>{const o=readSaved();const n=Object.keys(o).length;if(!n){toast("No saved voyages to back up yet");return}
+  localDownloads.save({filename:"voyage-planner-backup-"+new Date().toISOString().slice(0,10)+".json",data:JSON.stringify({app:"voyage-planner",type:"backup",saved:new Date().toISOString(),voyages:o},null,1)});toast(`Backup of ${n} voyage(s) downloaded`)});
+$("#bRestore").addEventListener("click",()=>{openModal(`<h3>Restore from backup</h3><p class="note">Choose a backup file made with “Back up all saved voyages”. Voyages are added to this device; ones with the same ID are replaced.</p><input type="file" accept=".json,application/json" id="rsFile"><div class="row"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn pri" id="rsGo">Restore</button></div>`);
+  $("#rsGo").onclick=async()=>{const f=$("#rsFile").files[0];if(!f){toast("Choose a backup file");return}try{const j=JSON.parse(await f.text());if(!j.voyages)throw 0;const o=readSaved();let n=0;for(const [k,v] of Object.entries(j.voyages)){if(v&&v.plan&&Array.isArray(v.plan.legs)){o[k]=v;n++}}writeSaved(o);closeModal();listSaved();toast(`Restored ${n} voyage(s)`)}catch(e){toast("That isn't a voyage-planner backup file")}}});
+
+/* ---- install & offline ---- */
+let deferredInstall=null;
+const isStandalone=()=>window.matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstall=e;if(!isStandalone())$("#bInstall").style.display=""});
+window.addEventListener("appinstalled",()=>{$("#bInstall").style.display="none";toast("Installed. Open it from your home screen or desktop")});
+$("#bInstall").addEventListener("click",async()=>{
+  if(deferredInstall){deferredInstall.prompt();const r=await deferredInstall.userChoice.catch(()=>null);deferredInstall=null;if(r&&r.outcome==="accepted")$("#bInstall").style.display="none";return}
+  openModal(`<h3>Install the app</h3><p><b>iPhone / iPad (Safari):</b> tap the Share button ⬆︎, then <b>Add to Home Screen</b>.</p><p><b>Android (Chrome):</b> tap ⋮ menu → <b>Install app</b> / Add to Home screen.</p><p><b>Windows / Mac (Chrome or Edge):</b> click the install icon ⊕ at the right end of the address bar, or ⋮ → <b>Install Voyage Planner</b>.</p><div class="row"><button class="btn pri" onclick="closeModal()">OK</button></div>`)});
+if(/iphone|ipad|ipod/i.test(navigator.userAgent)&&!isStandalone())$("#bInstall").style.display="";
+function netState(){const v=$("#vesselIn");let p=$("#offPill");if(!navigator.onLine){if(!p){p=document.createElement("span");p.id="offPill";p.className="offline-pill";p.textContent="Offline. Saved on this device";$("#routeLine").appendChild(p)}}else if(p)p.remove()}
+window.addEventListener("online",netState);window.addEventListener("offline",netState);
+if("serviceWorker" in navigator&&location.protocol.startsWith("http")){
+  navigator.serviceWorker.register("sw.js").then(reg=>{
+    reg.addEventListener("updatefound",()=>{const w=reg.installing;w&&w.addEventListener("statechange",()=>{if(w.state==="installed"&&navigator.serviceWorker.controller){openModal(`<h3>Update available</h3><p class="note">A new version of the planner has been downloaded. Your voyages are kept.</p><div class="row"><button class="btn" onclick="closeModal()">Later</button><button class="btn pri" id="upGo">Update now</button></div>`);$("#upGo").onclick=()=>{w.postMessage("skipWaiting")}}})})});
+  let reloading=false;navigator.serviceWorker.addEventListener("controllerchange",()=>{if(!reloading){reloading=true;location.reload()}});
+}
+
+/* ---- persistence ---- */
+function autosave(){try{localStorage.setItem("vfp_draft",JSON.stringify({plan,savedId,savedSnap}))}catch(e){}recordHistory()}
+function loadPlan(p,id){plan=p;savedId=id;if(!plan.builder)plan.builder=defaultBuilder();buildInputs();fillInputs();buildLegs();fillOpts();buildStops();lastRoute=null;$("#routeOut").style.display="none";refresh()}
+function savedCol(){return dbNS.collection("data/users/"+userId)}
+$("#bSave").addEventListener("click",()=>{
+  if(!dbNS||!userId){openModal(`<h3>Save voyage</h3><p class="note">Saving isn't available in this browser (private mode?). Use Export → voyage file to keep a copy.</p><div class="row"><button class="btn" onclick="closeModal()">OK</button></div>`);return}
+  openModal(`<h3>Save voyage</h3><input class="y" id="svName" style="text-align:left;font-family:inherit" value="${esc(plan.title)}"><div class="row"><button class="btn" onclick="closeModal()">Cancel</button>${savedId?`<button class="btn" id="svNew">Save as new</button>`:""}<button class="btn pri" id="svGo">${savedId?"Update":"Save"}</button></div>`);
+  const go=async asNew=>{const name=$("#svName").value.trim()||"Voyage";plan.title=name;$("#voyTitle").value=name;
+    const id=(!asNew&&savedId)||("v"+Date.now().toString(36));
+    try{await savedCol().doc(id).set({name,updated:new Date().toISOString(),plan:JSON.parse(JSON.stringify(plan))});savedId=id;savedSnap=snap();autosave();closeModal();toast("Voyage saved");listSaved()}
+    catch(e){toast(e?.code==="quota_exceeded"?"Storage full — delete an old voyage":"Save failed ("+(e?.code||"error")+")")}};
+  $("#svGo").onclick=()=>go(false);if($("#svNew"))$("#svNew").onclick=()=>go(true);
+});
+async function listSaved(){
+  if(!dbNS||!userId){$("#savedNote").textContent="Saving isn't available in this browser (private mode?). Use Export / Import voyage files instead.";return}
+  try{
+    const s=await savedCol().get();
+    const docs=s.docs.filter(d=>d.exists).map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.updated||"").localeCompare(a.updated||""));
+    $("#savedNote").textContent=docs.length?"Saved on this device only. Use “Back up all saved voyages” to keep a copy or move them to another device.":"No saved voyages yet. Use “Save voyage” at the top.";
+    $("#savedList").innerHTML=docs.map(d=>`<div class="saved-row"><div><div class="nm">${esc(d.name)}</div>${d.plan?.vessel?`<div class="dt">${esc(d.plan.vessel)}</div>`:""}<div class="dt">Saved ${esc((d.updated||"").replace("T"," ").slice(0,16))} UTC · ${(d.plan?.legs||[]).length} rows</div></div><div class="act" style="display:flex;gap:6px"><button class="btn" data-open="${esc(d.id)}">Open</button><button class="btn" data-delv="${esc(d.id)}">Delete</button></div></div>`).join("");
+    $("#savedList").onclick=async e=>{
+      const o=e.target.dataset.open,dl=e.target.dataset.delv;
+      if(o){const d=docs.find(x=>x.id===o);if(d){recordNow();restoring=true;loadPlan(JSON.parse(JSON.stringify(d.plan)),o);restoring=false;savedSnap=snap();recordNow();toast("Opened "+d.name);document.querySelector('#tabs [data-v="plan"]').click()}}
+      if(dl){openModal(`<h3>Delete saved voyage?</h3><p class="note">${esc(docs.find(x=>x.id===dl)?.name)}</p><div class="row"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn pri" id="delGo">Delete</button></div>`);
+        $("#delGo").onclick=async()=>{try{await savedCol().doc(dl).delete();if(savedId===dl)savedId=null;closeModal();listSaved()}catch(e){toast("Delete failed")}}}
+    };
+  }catch(e){$("#savedNote").textContent="Couldn't reach saved voyages right now."}
+}
+
+/* ---- boot ---- */
+(function boot(){
+  let d=null;try{d=JSON.parse(localStorage.getItem("vfp_draft")||"null")}catch(e){}
+  restoring=true;if(d&&d.plan&&Array.isArray(d.plan.legs)){loadPlan(d.plan,d.savedId||null);savedSnap=d.savedSnap||null}else loadPlan(sampleVoyage(),null);restoring=false;recordNow();
+  dbNS=localDb;userId="device";dlNS=localDownloads;
+  listSaved();
+})();
+</script>
+</body>
+</html>
