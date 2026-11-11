@@ -1,5 +1,5 @@
 /* Voyage Planner service worker: keeps the app working offline. Bump VERSION on every release. */
-const VERSION = 'v1.1.0';
+const VERSION = 'v1.2.0';
 const CORE = ['./', 'index.html', 'sr.js', 'ports.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png'];
 const CACHE = 'voyage-planner-' + VERSION;
 const FONT_CACHE = 'voyage-planner-fonts';

@@ -151,6 +151,11 @@ pre.req{background:#f7f9fb;border:1px solid var(--line);border-radius:8px;paddin
 .ac div.on,.ac div:hover{background:#eef3f8}
 .ac small{display:block;color:var(--muted);font-size:11px}
 .ac .star{color:#c98500}
+.choice{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:12px;background:#fbfcfd}
+.ch-h{font-size:13px;margin-bottom:6px;color:var(--ink-2)}
+.ch-o{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:6px;cursor:pointer;border:1px solid transparent}
+.ch-o.on{background:#eef3f8;border-color:#c9d8ea}.ch-o input{margin-top:3px}
+.ch-t{display:flex;flex-direction:column;gap:2px;font-size:13px}.ch-d{font-size:12px;color:var(--ink-2);font-family:var(--mono)}
 @media print{header nav,.hbtns,.toolbar,.no-print{display:none!important}.view{display:block!important}main{padding:0}.card{break-inside:avoid}}
 </style>
 </head>
@@ -254,6 +259,7 @@ pre.req{background:#f7f9fb;border:1px solid var(--line);border-radius:8px;paddin
     <div class="grid">
       <div class="card">
         <h2>Proposed legs</h2>
+        <div id="rChoices"></div>
         <div class="scroll" style="max-height:none" id="rLegs"></div>
         <div id="rWarn"></div>
         <div class="toolbar" style="margin:12px 0 0">
@@ -353,10 +359,9 @@ function sampleVoyage(){
     builder:defaultBuilder()
   };
 }
-function defaultBuilder(){return {draft:10,allow:5,merge:75,avoidSuez:false,avoidPanama:false,stops:[
+function defaultBuilder(){return {draft:10,allow:5,merge:75,avoidSuez:false,avoidPanama:false,gates:{"les escoumins pilot station>savona:gsl":"cabot"},stops:[
   {name:"Sorel — Canada (CASOR)",lat:46.0428,lon:-73.1123,role:"port",days:7,bunker:true,pick:true},
   {name:"Les Escoumins pilot station",lat:48.30,lon:-69.40,role:"break",days:0},
-  {name:"Cabot Strait (waypoint)",lat:47.33,lon:-59.85,role:"via",days:0},
   {name:"Savona — Italy (ITSVN)",lat:44.28,lon:8.5,role:"port",days:2.5},
   {name:"Torre Annunziata",lat:40.75,lon:14.44,role:"port",days:5},
   {name:"Varna — Bulgaria (BGVAR)",lat:43.2141,lon:27.9147,role:"drydock",days:0},
@@ -868,6 +873,10 @@ $("#stopTbl").addEventListener("click",e=>{const b=e.target.closest("button[data
 $("#bAddStop").addEventListener("click",()=>{B().stops.push({name:"",lat:NaN,lon:NaN,role:"port",days:1,bunker:false});buildStops();autosave()});
 const shortName=n=>(n||"").replace(/\s*[—–-]\s*[^—–-]*\([A-Z]{5}\)\s*$/,"").replace(/\s*\([A-Z]{5}\)\s*$/,"").trim()||"—";
 
+const GATES=[
+  {id:"gsl",name:"Gulf of St Lawrence exit",opts:[{id:"belle",label:"Strait of Belle Isle",wp:[-56.958,51.21]},{id:"cabot",label:"Cabot Strait",wp:[-59.07,47.45]}]},
+  {id:"uk",name:"Passage round Great Britain",opts:[{id:"channel",label:"English Channel (Dover Strait)",wp:[1.495,51.139]},{id:"pentland",label:"Pentland Firth",wp:[-2.897,58.567]},{id:"fairisle",label:"Fair Isle Channel",wp:[-1.981,59.395]}]}
+];
 async function calcRoute(){
   const b=B(),S=b.stops,msg=$("#routeMsg");
   const bad=S.findIndex(s=>!Number.isFinite(s.lat)||!Number.isFinite(s.lon));
@@ -879,18 +888,42 @@ async function calcRoute(){
   const opt={draft:num(b.draft),avoidSuez:b.avoidSuez,avoidPanama:b.avoidPanama,mergeNm:num(b.merge)};
   const allow=1+num(b.allow)/100;
   try{
-    // group stops into passages between "boundary" stops (anything but Route via)
-    const passages=[];let cur=null;const warns=[];
-    for(let i=1;i<S.length;i++){
-      const a=S[i-1],z=S[i];let r;
-      try{r=sr.routeLeg([a.lon,a.lat],[z.lon,z.lat],opt)}
-      catch(err){if(!/same network vertex|closer together/i.test(String(err&&err.message)))throw err;
-        r={nm:sr.hv([a.lon,a.lat],[z.lon,z.lat]),coords:[[a.lon,a.lat],[z.lon,z.lat]],passages:[],snapA:0,snapB:0};
-        warns.push(`${shortName(a.name)} → ${shortName(z.name)} is shorter than the route network's spacing, so it was measured as a straight line (${f0(r.nm)} nm).`)}
-      if(r.snapA>15)warns.push(`${shortName(a.name)} is ${f0(r.snapA)} nm from the route network; the leg starts from the nearest network point.`);
-      if(r.snapB>15)warns.push(`${shortName(z.name)} is ${f0(r.snapB)} nm from the route network; the leg ends at the nearest network point.`);
-      if(!cur){cur={from:a,to:z,coords:r.coords.slice(),passages:new Set(r.passages)};passages.push(cur)}else{cur.to=z;cur.coords=cur.coords.concat(r.coords.slice(1));r.passages.forEach(p=>cur.passages.add(p))}
-      if(z.role!=="via"||i===S.length-1)cur=null;
+    const warns=[],memo=new Map();
+    const leg=(a,z)=>{const k=a.join()+">"+z.join();if(memo.has(k))return memo.get(k);let r;
+      try{r=sr.routeLeg(a,z,opt)}catch(err){if(!/same network vertex|closer together/i.test(String(err&&err.message)))throw err;r={nm:sr.hv(a,z),coords:[a,z],passages:[],snapA:0,snapB:0,straight:true}}
+      memo.set(k,r);return r};
+    const routePts=(pts)=>{let coords=null,passes=new Set(),nm=0;const legsR=[];for(let i=1;i<pts.length;i++){const r=leg(pts[i-1].c,pts[i].c);legsR.push(r);nm+=r.nm;coords=coords?coords.concat(r.coords.slice(1)):r.coords.slice();r.passages.forEach(x=>passes.add(x))}return {coords,passes,nm,legsR}};
+    const near=(coords,wp)=>{let m=Infinity,idx=0;for(let i=1;i<coords.length;i++){const a=coords[i-1],c=coords[i],d=sr.hv(a,c),n=Math.max(1,Math.ceil(d/5));for(let k=0;k<=n;k++){const t=k/n,q=[a[0]+(c[0]-a[0])*t,a[1]+(c[1]-a[1])*t],dd=sr.hv(q,wp);if(dd<m){m=dd;idx=i-1+t}}}return {d:m,idx}};
+    // passages between boundary stops (anything but "Route via")
+    const groupsP=[];let cur=null;
+    for(let i=1;i<S.length;i++){if(!cur){cur={from:S[i-1],vias:[],to:null};groupsP.push(cur)}const z=S[i];if(z.role==="via"&&i<S.length-1)cur.vias.push(z);else{cur.to=z;cur=null}}
+    b.gates=b.gates||{};
+    const passages=[],choices=[];
+    for(const G of groupsP){
+      const P0=[G.from,...G.vias,G.to].map(s=>({c:[s.lon,s.lat],s}));
+      const base=routePts(P0);
+      // user-stop warnings
+      base.legsR.forEach((r,i)=>{const a=P0[i].s,z=P0[i+1].s;
+        if(r.straight)warns.push(`${shortName(a.name)} → ${shortName(z.name)} is shorter than the route network's spacing, so it was measured as a straight line (${f0(r.nm)} nm).`);
+        if(r.snapA>15)warns.push(`${shortName(a.name)} is ${f0(r.snapA)} nm from the route network; the leg starts from the nearest network point.`);
+        if(r.snapB>15)warns.push(`${shortName(z.name)} is ${f0(r.snapB)} nm from the route network; the leg ends at the nearest network point.`)});
+      let final=base;
+      if(!G.vias.length){
+        const rel=GATES.map(g=>({g,hits:g.opts.map(o=>near(base.coords,o.wp))})).filter(x=>Math.min(...x.hits.map(h=>h.d))<=120);
+        if(rel.length){
+          const pkey=nrm(shortName(G.from.name))+">"+nrm(shortName(G.to.name));
+          const sel={};rel.forEach(x=>{const k=pkey+":"+x.g.id;let s=b.gates[k];if(!x.g.opts.some(o=>o.id===s)){let bi=0;x.hits.forEach((h,i)=>{if(h.d<x.hits[bi].d)bi=i});s=x.g.opts[bi].id}sel[x.g.id]=s});
+          const build=over=>{const pick=Object.assign({},sel,over);const wps=rel.map(x=>{const o=x.g.opts.find(o=>o.id===pick[x.g.id]);return {c:o.wp,idx:x.hits[x.g.opts.indexOf(o)].idx}}).sort((a,b)=>a.idx-b.idx);return routePts([P0[0],...wps.map(w=>({c:w.c})),P0[P0.length-1]])};
+          rel.forEach(x=>{
+            const opts=x.g.opts.map(o=>{const r=build({[x.g.id]:o.id});const runs=sr.splitCoords(r.coords,opt.mergeNm);const e=runs.filter(q=>q.zone==="ECA").reduce((s,q)=>s+q.nm,0),ne=r.nm-e;return {o,nm:r.nm,eca:e,non:ne}});
+            const minNm=Math.min(...opts.map(q=>q.nm));const shown=opts.filter(q=>q.nm<=minNm*1.25||q.o.id===sel[x.g.id]);
+            if(shown.length>=2)choices.push({key:pkey+":"+x.g.id,group:x.g,from:G.from,to:G.to,opts:shown,sel:sel[x.g.id],minNm});
+          });
+          final=build({});
+        }
+      }
+      if(num(b.draft)>7.0)final.passes.delete("kiel");if(num(b.draft)>7.3)final.passes.delete("corinth");
+      passages.push({from:G.from,to:G.to,coords:final.coords,passages:final.passes});
     }
     const legs=[];let n=0,allRuns=[];
     const stopRow=s=>s.role==="port"?{type:"Port Ops",desc:`${shortName(s.name)} — port stay`,days:num(s.days),bunker:!!s.bunker}:s.role==="drydock"?{type:"Drydock",desc:`${shortName(s.name)} — drydock`,days:0,bunker:false}:null;
@@ -906,19 +939,23 @@ async function calcRoute(){
       const sr2=P.to===S[S.length-1]?null:stopRow(P.to);if(sr2)legs.push(sr2);
     });
     if(!S.some(s=>s.bunker))warns.push("No bunker port ticked, so the lift won't be applied. Tick “Bunker here” on a port stay.");
-    lastRoute={legs,runs:allRuns,stops:S.map(s=>({...s}))};
+    lastRoute={legs,runs:allRuns,stops:S.map(s=>({...s})),choices};
     await loadPorts().catch(()=>{});const nNew=rememberMyPorts(S);if(nNew)warns.push(`${nNew} new point(s) added to ★ My ports for next time.`);
     renderRoute(warns);msg.textContent="";
   }catch(e){msg.textContent="Route failed: "+(e?.message||e)}
   $("#bRoute").disabled=false;
 }
 $("#bRoute").addEventListener("click",calcRoute);
+$("#rChoices").addEventListener("change",e=>{const el=e.target;if(!el.dataset.key)return;B().gates=B().gates||{};B().gates[el.dataset.key]=el.value;autosave();calcRoute()});
 function renderRoute(warns){
   const L=lastRoute.legs,T=L.filter(l=>l.type==="Transit");
   const tot=z=>T.filter(l=>!z||l.zone===z).reduce((s,l)=>s+l.dist,0),raw=T.reduce((s,l)=>s+l.raw,0);
   $("#rLegs").innerHTML=`<table><thead><tr><th class="l">Leg</th><th class="l">Description</th><th class="l">Zone</th><th>searoute nm</th><th>+ allowance nm</th></tr></thead><tbody>${L.map(l=>l.type==="Transit"?`<tr><td class="l">${esc(l.label)}</td><td class="l">${esc(l.desc)}</td><td class="l"><span class="pill ${l.zone==="ECA"?"L":"V"}">${l.zone}</span>${l.names&&l.names.length?` <span class="note">${esc(l.names.join(", "))}</span>`:""}</td><td class="n">${f0(l.raw)}</td><td class="n"><b>${f0(l.dist)}</b></td></tr>`:`<tr class="${l.type==="Drydock"?"dd":"port"}"><td></td><td class="l">${esc(l.desc)}${l.bunker?" · bunkers":""}</td><td class="l note">${l.type}</td><td class="n" colspan="2">${l.type==="Port Ops"?f2(l.days)+" d":"drydock days from inputs"}</td></tr>`).join("")}
 <tr class="total"><td></td><td class="l">Total: ECA ${f0(tot("ECA"))} · Non-ECA ${f0(tot("Non-ECA"))}</td><td class="l note">${(()=>{const v=[...new Set(L.flatMap(l=>l.via||[]))];return v.length?"Transits: "+esc(v.map(x=>x[0].toUpperCase()+x.slice(1)).join(", ")):""})()}</td><td class="n">${f0(raw)}</td><td class="n">${f0(tot())}</td></tr></tbody></table>`;
   warns=[...new Set(warns.map(w=>w.replace(/; the leg (starts from|ends at) the nearest network point\./,"; that end of the leg uses the nearest network point.")))];
+  const allowF=1+num(B().allow)/100,I=plan.inputs;
+  const fuel=q=>({L:q.eca*allowF/num(I.spdECA)/24*num(I.rECA),V:q.non*allowF/num(I.spdNon)/24*num(I.rNon)});
+  $("#rChoices").innerHTML=(lastRoute.choices||[]).map((c,ci)=>`<div class="choice"><div class="ch-h"><b>${esc(shortName(c.from.name))} → ${esc(shortName(c.to.name))}</b> · ${esc(c.group.name)}</div>${c.opts.map(q=>{const f=fuel(q),d=q.nm-c.minNm;return `<label class="ch-o ${q.o.id===c.sel?"on":""}"><input type="radio" name="ch${ci}" data-key="${esc(c.key)}" value="${q.o.id}" ${q.o.id===c.sel?"checked":""}><span class="ch-t"><span><b>${esc(q.o.label)}</b>${d<0.5?' <span class="pill" style="background:var(--good-bg);color:var(--good)">shortest</span>':` <span class="note">+${f0(d*allowF)} nm</span>`}</span><span class="ch-d">${f0(q.nm*allowF)} nm · ECA ${f0(q.eca*allowF)} / Non-ECA ${f0(q.non*allowF)} · est. LSMGO ${f1(f.L)} MT, VLSFO ${f1(f.V)} MT</span></span></label>`}).join("")}</div>`).join("");
   $("#rWarn").innerHTML=warns.length?`<div class="warnbox">${warns.map(esc).join("<br>")}</div>`:"";
   $("#routeOut").style.display="block";drawRouteMap();
 }
