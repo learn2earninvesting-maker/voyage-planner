@@ -145,6 +145,12 @@ pre.req{background:#f7f9fb;border:1px solid var(--line);border-radius:8px;paddin
 .opt-grid .ck input{width:auto}
 #rmap svg{display:block;width:100%;max-width:1100px;height:auto;background:#eaf2f8;border-radius:8px}
 .warnbox{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:10px 12px;font-size:13px;margin-top:10px}
+.ac{position:fixed;z-index:60;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(15,39,66,.18);max-height:320px;overflow:auto;min-width:300px}
+.ac div{padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--line-2);font-size:13px}
+.ac div:last-child{border-bottom:0}
+.ac div.on,.ac div:hover{background:#eef3f8}
+.ac small{display:block;color:var(--muted);font-size:11px}
+.ac .star{color:#c98500}
 @media print{header nav,.hbtns,.toolbar,.no-print{display:none!important}.view{display:block!important}main{padding:0}.card{break-inside:avoid}}
 </style>
 </head>
@@ -225,10 +231,10 @@ pre.req{background:#f7f9fb;border:1px solid var(--line);border-radius:8px;paddin
 <section class="view" id="v-builder">
   <div class="card" style="margin-bottom:16px">
     <h2>Port rotation</h2>
-    <p class="note" style="margin-top:0">Pick each port in sailing order (type to search ~1,600 ports, or enter your own name and lat/lon, e.g. <code>48 18.0N</code> / <code>069 24.0W</code> or decimals). “Route via” forces the route through a point, such as Cabot Strait; “Leg break” starts a new leg without a stay, such as a pilot station. Distances come from the free searoute network for <b>bunker estimates only, not for navigation</b>: replace them with passage-plan figures once the plan is drawn.</p>
+    <p class="note" style="margin-top:0">Pick each port in sailing order (type to search about 12,900 ports, harbours and anchorages, or enter your own name and lat/lon, e.g. <code>48 18.0N</code> / <code>069 24.0W</code> or decimals). “Route via” forces the route through a point, such as Cabot Strait; “Leg break” starts a new leg without a stay, such as a pilot station. Distances come from the free searoute network for <b>bunker estimates only, not for navigation</b>: replace them with passage-plan figures once the plan is drawn.</p>
     <div class="scroll" style="max-height:none"><table class="stops" id="stopTbl"></table></div>
     <div class="toolbar" style="margin:10px 0 0"><button class="btn" id="bAddStop">+ Add port / point</button></div>
-    <datalist id="portList"></datalist>
+    <p class="note" style="margin:8px 0 0">Port data: NGA World Port Index (Pub. 150), GeoNames (CC BY 4.0) and a UN/LOCODE sea-ports list. Points you enter yourself are kept under <b>★ My ports</b> on this device.</p>
   </div>
   <div class="card" style="margin-bottom:16px">
     <h2>Routing options</h2>
@@ -292,7 +298,7 @@ pre.req{background:#f7f9fb;border:1px solid var(--line);border-radius:8px;paddin
 
 <!-- SAVED -->
 <section class="view" id="v-saved">
-  <div class="card" style="max-width:760px">
+  <div class="card" style="max-width:760px;margin-bottom:16px">
     <h2>Saved voyages</h2>
     <p class="note" style="margin-top:0" id="savedNote">Connecting to storage…</p>
     <div id="savedList"></div>
@@ -301,6 +307,11 @@ pre.req{background:#f7f9fb;border:1px solid var(--line);border-radius:8px;paddin
       <button class="btn" id="bRestore">Restore from backup</button>
       <button class="btn" id="bLoadSample">Load sample voyage (Sorel → Istanbul)</button>
     </div>
+  </div>
+  <div class="card" style="max-width:760px">
+    <h2>★ My ports</h2>
+    <p class="note" style="margin-top:0">Pilot stations, anchorages, berths and waypoints you've entered yourself. They show first when you search in the Route builder.</p>
+    <div id="myPortsList"></div>
   </div>
 </section>
 </main>
@@ -343,7 +354,7 @@ function sampleVoyage(){
   };
 }
 function defaultBuilder(){return {draft:10,allow:5,merge:75,avoidSuez:false,avoidPanama:false,stops:[
-  {name:"Sorel — Canada (CASOR)",lat:46.0428,lon:-73.1123,role:"port",days:7,bunker:true},
+  {name:"Sorel — Canada (CASOR)",lat:46.0428,lon:-73.1123,role:"port",days:7,bunker:true,pick:true},
   {name:"Les Escoumins pilot station",lat:48.30,lon:-69.40,role:"break",days:0},
   {name:"Cabot Strait (waypoint)",lat:47.33,lon:-59.85,role:"via",days:0},
   {name:"Savona — Italy (ITSVN)",lat:44.28,lon:8.5,role:"port",days:2.5},
@@ -701,7 +712,7 @@ $("#vesselIn").addEventListener("input",e=>{plan.vessel=e.target.value;document.
 document.querySelectorAll("#tabs button").forEach(b=>b.addEventListener("click",()=>{
   document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("on",x===b));
   document.querySelectorAll(".view").forEach(v=>v.classList.toggle("on",v.id==="v-"+b.dataset.v));
-  if(b.dataset.v==="builder")loadSR().catch(()=>{});
+  if(b.dataset.v==="builder"){loadSR().catch(()=>{});loadPorts().catch(()=>{})}
 }));
 async function copy(text,msg){try{await navigator.clipboard.writeText(text);toast(msg||"Copied")}catch(e){openModal(`<h3>Copy</h3><textarea readonly>${esc(text)}</textarea><div class="row"><button class="btn" onclick="closeModal()">Close</button></div>`)}}
 $("#bCopyReq").addEventListener("click",()=>copy($("#reqText").textContent,"Requisition text copied"));
@@ -746,12 +757,74 @@ $("#bNew").addEventListener("click",()=>(setTimeout(()=>{const i=$("#nvShip");if
 $("#bLoadSample").addEventListener("click",()=>{recordNow();const v=plan.vessel;const sp=sampleVoyage();if(v)sp.vessel=v;loadPlan(sp,null);savedSnap=null;toast("Sample voyage loaded");document.querySelector('#tabs [data-v="plan"]').click()});
 
 
+
+/* ---- port search (World Port Index + GeoNames + UN/LOCODE) & My ports ---- */
+let portsReady=null,PIDX=null;
+const nrm=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+let regionName=cc=>cc;try{const dn=new Intl.DisplayNames(["en"],{type:"region"});regionName=cc=>{try{return cc?dn.of(cc):""}catch(e){return cc}}}catch(e){}
+function loadPorts(){
+  if(portsReady)return portsReady;
+  portsReady=new Promise((res,rej)=>{if(window.PORTDB)return res();const s=document.createElement("script");s.src="ports.js";s.onload=()=>res();s.onerror=()=>{portsReady=null;rej(new Error("Couldn't load the port list"))};document.head.appendChild(s)})
+   .then(()=>{const T=PORTDB.types;PIDX=PORTDB.p.map(e=>({n:e[0],c:e[1],la:e[2],lo:e[3],t:T[e[4]],lc:e[5],a:e[6]||[],tp:e[4],k:[nrm(e[0])].concat((e[6]||[]).map(nrm))}))});
+  return portsReady;
+}
+function myPorts(){try{return JSON.parse(localStorage.getItem("vfp_myports")||"[]")}catch(e){return []}}
+function setMyPorts(a){try{localStorage.setItem("vfp_myports",JSON.stringify(a))}catch(e){}}
+const portLabel=p=>p.n+(p.c?" — "+regionName(p.c):"")+(p.lc?" ("+p.lc+")":"");
+function searchPorts(q){
+  const k=nrm(q);if(!k)return [];
+  const mine=myPorts().map(m=>({n:m.n,c:"",la:m.la,lo:m.lo,t:"★ My port",lc:"",a:[],tp:-1,k:[nrm(m.n)],mine:true}));
+  const all=mine.concat(PIDX||[]);const hits=[];
+  for(const p of all){let sc=-1;for(const key of p.k){if(key===k){sc=Math.max(sc,4)}else if(key.startsWith(k)){sc=Math.max(sc,3)}else if((" "+key).includes(" "+k)){sc=Math.max(sc,2)}else if(k.length>=3&&key.includes(k)){sc=Math.max(sc,1)}}
+    if(p.lc&&nrm(p.lc)===k)sc=5;
+    if(sc>=0)hits.push([sc+(p.mine?.5:0)-(p.tp>=3?.2:0),p])}
+  hits.sort((a,b)=>b[0]-a[0]||a[1].n.length-b[1].n.length);
+  return hits.slice(0,14).map(h=>h[1]);
+}
+let acBox=null,acSel=0,acList=[],acInput=null;
+function acClose(){if(acBox){acBox.remove();acBox=null}acInput=null}
+function acShow(input){
+  acList=searchPorts(input.value);acInput=input;
+  if(!acList.length){acClose();acInput=input;return}
+  if(!acBox){acBox=document.createElement("div");acBox.className="ac";document.body.appendChild(acBox);
+    acBox.addEventListener("mousedown",e=>{e.preventDefault();const d=e.target.closest("[data-i]");if(d)acPick(+d.dataset.i)})}
+  const r=input.getBoundingClientRect();acBox.style.left=Math.max(4,Math.min(r.left,innerWidth-Math.max(r.width,300)-4))+"px";acBox.style.width=Math.max(r.width,300)+"px";
+  const below=innerHeight-r.bottom>200;acBox.style.top=below?(r.bottom+2)+"px":"";acBox.style.bottom=below?"":(innerHeight-r.top+2)+"px";
+  acSel=Math.min(acSel,acList.length-1);
+  acBox.innerHTML=acList.map((p,i)=>`<div data-i="${i}" class="${i===acSel?"on":""}">${p.mine?'<span class="star">★</span> ':""}<b>${esc(p.n)}</b>${p.c?" · "+esc(regionName(p.c)):""}${p.lc?` <span class="note">${esc(p.lc)}</span>`:""}<small>${esc(p.t)} · ${fmtLL(p.la,true)} ${fmtLL(p.lo,false)}${p.a.length?" · also: "+esc(p.a.slice(0,2).join(", ")):""}</small></div>`).join("");
+}
+function acPick(i){
+  const p=acList[i];if(!p||!acInput)return;const tr=acInput.closest("tr[data-s]");if(!tr)return;
+  const s=B().stops[+tr.dataset.s];s.name=p.mine?p.n:portLabel(p);s.lat=p.la;s.lon=p.lo;s.pick=true;const inp=acInput;acClose();inp.value=s.name;buildStops();autosave();
+  const nxt=document.querySelector(`#stopTbl tr[data-s="${+tr.dataset.s}"] select`);if(nxt)nxt.focus();
+}
+$("#stopTbl").addEventListener("input",e=>{const el=e.target;if(el.dataset.g!=="name")return;acSel=0;loadPorts().then(()=>{if(document.activeElement===el)acShow(el)}).catch(()=>{})});
+$("#stopTbl").addEventListener("focusin",e=>{const el=e.target;if(el.dataset.g==="name"&&el.value&&!B().stops[+el.closest("tr").dataset.s].pick)loadPorts().then(()=>{if(document.activeElement===el)acShow(el)}).catch(()=>{})});
+$("#stopTbl").addEventListener("focusout",e=>{if(e.target.dataset.g==="name")setTimeout(()=>{if(acInput===e.target)acClose()},150)});
+$("#stopTbl").addEventListener("keydown",e=>{if(e.target.dataset.g!=="name"||!acBox)return;
+  if(e.key==="ArrowDown"){e.preventDefault();acSel=Math.min(acSel+1,acList.length-1);acShow(e.target)}
+  else if(e.key==="ArrowUp"){e.preventDefault();acSel=Math.max(acSel-1,0);acShow(e.target)}
+  else if(e.key==="Enter"){e.preventDefault();acPick(acSel)}else if(e.key==="Escape")acClose()});
+window.addEventListener("scroll",()=>{if(acBox&&acInput)acShow(acInput)},true);
+const hvNm=(a,b)=>{const r=Math.PI/180,dla=(b[1]-a[1])*r,dlo=(b[0]-a[0])*r;const x=Math.sin(dla/2)**2+Math.cos(a[1]*r)*Math.cos(b[1]*r)*Math.sin(dlo/2)**2;return 2*3440.065*Math.asin(Math.min(1,Math.sqrt(x)))};
+function rememberMyPorts(stops){
+  const mine=myPorts();let added=0;
+  const known=s=>{const k=nrm(s.name);return (PIDX||[]).some(p=>(p.k.includes(k)||nrm(portLabel(p))===k)&&hvNm([p.lo,p.la],[s.lon,s.lat])<10)};
+  stops.forEach(s=>{if(s.pick||/\([A-Z]{5}\)\s*$/.test(s.name||"")||!s.name||!Number.isFinite(s.lat)||!Number.isFinite(s.lon)||known(s))return;const n=s.name.trim();const i=mine.findIndex(m=>nrm(m.n)===nrm(n));
+    if(i>=0){mine[i].la=s.lat;mine[i].lo=s.lon}else{mine.push({n,la:s.lat,lo:s.lon});added++}});
+  setMyPorts(mine);renderMyPorts();return added;
+}
+function renderMyPorts(){
+  const m=myPorts();const el=$("#myPortsList");if(!el)return;
+  el.innerHTML=m.length?m.map((p,i)=>`<div class="saved-row"><div><div class="nm">★ ${esc(p.n)}</div><div class="dt">${fmtLL(p.la,true)} ${fmtLL(p.lo,false)}</div></div><button class="btn" data-mp="${i}">Delete</button></div>`).join(""):`<p class="note">None yet. When you type a name and your own lat/lon in the Route builder, it's added here after you calculate the route.</p>`;
+}
+$("#myPortsList").addEventListener("click",e=>{const i=e.target.dataset.mp;if(i==null)return;const m=myPorts();m.splice(+i,1);setMyPorts(m);renderMyPorts()});
+
 /* ---- route builder (searoute) ---- */
 let srReady=null, lastRoute=null;
 function loadSR(){
   if(srReady)return srReady;
   srReady=new Promise((res,rej)=>{if(window.SR)return res(window.SR);const s=document.createElement("script");s.src="sr.js";s.onload=()=>window.SR?res(window.SR):rej(new Error("engine missing"));s.onerror=()=>{srReady=null;rej(new Error("Couldn't load the routing engine — check the connection and try again"))};document.head.appendChild(s)});
-  srReady.then(sr=>{$("#portList").innerHTML=sr.ports.map(p=>`<option value="${esc(p.name+(p.country?" — "+p.country:"")+(p.code&&!p.code.startsWith("WP-")?" ("+p.code+")":""))}">`).join("")}).catch(()=>{});
   return srReady;
 }
 function parseCoord(s,isLat){
@@ -772,7 +845,7 @@ function buildStops(){
   const st=B().stops,last=st.length-1;
   $("#stopTbl").innerHTML=`<thead><tr><th class="l">#</th><th class="l">Port / point</th><th class="l">Latitude</th><th class="l">Longitude</th><th class="l">Role</th><th>Stay (days)</th><th>Bunker here</th><th></th></tr></thead><tbody>${st.map((s,i)=>`<tr data-s="${i}">
 <td class="l n">${i+1}</td>
-<td><input class="pt" list="portList" data-g="name" value="${esc(s.name)}" placeholder="Search port or type a name"></td>
+<td><input class="pt" autocomplete="off" data-g="name" value="${esc(s.name)}" placeholder="Search port or type a name"></td>
 <td><input class="co" data-g="lat" value="${esc(fmtLL(s.lat,true))}" placeholder="48 18.0N"></td>
 <td><input class="co" data-g="lon" value="${esc(fmtLL(s.lon,false))}" placeholder="069 24.0W"></td>
 <td>${i===last?`<span class="note">${i===0?"start":"final port"}</span>`:i===0?`<select data-g="role">${ROLES.filter(r=>r[0]!=="via").map(r=>`<option value="${r[0]}" ${r[0]===s.role?"selected":""}>${r[1]}</option>`).join("")}</select>`:`<select data-g="role">${ROLES.map(r=>`<option value="${r[0]}" ${r[0]===s.role?"selected":""}>${r[1]}</option>`).join("")}</select>`}</td>
@@ -782,9 +855,9 @@ function buildStops(){
   $("#stopTbl").querySelectorAll(".act button").forEach(b=>{b.style.cssText="border:1px solid var(--line);background:#fff;border-radius:4px;width:26px;height:26px;cursor:pointer;padding:0"});
 }
 $("#stopTbl").addEventListener("change",e=>{
-  const el=e.target,tr=el.closest("tr[data-s]");if(!tr)return;const s=B().stops[+tr.dataset.s],g=el.dataset.g;
-  if(g==="name"){s.name=el.value;const sr=window.SR;if(sr){const p=sr.ports.find(p=>el.value===p.name+(p.country?" — "+p.country:"")+(p.code&&!p.code.startsWith("WP-")?" ("+p.code+")":""));if(p){s.lat=p.lat;s.lon=p.lon;buildStops()}}}
-  else if(g==="lat"||g==="lon"){const v=parseCoord(el.value,g==="lat");s[g]=v;el.value=isFinite(v)?fmtLL(v,g==="lat"):el.value;el.style.outline=isFinite(v)?"":"2px solid var(--bad)"}
+  const el=e.target;if(!el.isConnected)return;const tr=el.closest("tr[data-s]");if(!tr)return;const s=B().stops[+tr.dataset.s],g=el.dataset.g;
+  if(g==="name"){if(s.name!==el.value){s.name=el.value;s.pick=false}}
+  else if(g==="lat"||g==="lon"){const v=parseCoord(el.value,g==="lat");s[g]=v;s.pick=false;el.value=isFinite(v)?fmtLL(v,g==="lat"):el.value;el.style.outline=isFinite(v)?"":"2px solid var(--bad)"}
   else if(g==="role"){s.role=el.value;if(s.role!=="port")s.bunker=false;if(s.role==="port"&&!num(s.days))s.days=1;buildStops()}
   else if(g==="days")s.days=el.value;
   else if(g==="bunker"){B().stops.forEach(x=>x.bunker=false);s.bunker=el.checked}
@@ -809,7 +882,11 @@ async function calcRoute(){
     // group stops into passages between "boundary" stops (anything but Route via)
     const passages=[];let cur=null;const warns=[];
     for(let i=1;i<S.length;i++){
-      const a=S[i-1],z=S[i];const r=sr.routeLeg([a.lon,a.lat],[z.lon,z.lat],opt);
+      const a=S[i-1],z=S[i];let r;
+      try{r=sr.routeLeg([a.lon,a.lat],[z.lon,z.lat],opt)}
+      catch(err){if(!/same network vertex|closer together/i.test(String(err&&err.message)))throw err;
+        r={nm:sr.hv([a.lon,a.lat],[z.lon,z.lat]),coords:[[a.lon,a.lat],[z.lon,z.lat]],passages:[],snapA:0,snapB:0};
+        warns.push(`${shortName(a.name)} → ${shortName(z.name)} is shorter than the route network's spacing, so it was measured as a straight line (${f0(r.nm)} nm).`)}
       if(r.snapA>15)warns.push(`${shortName(a.name)} is ${f0(r.snapA)} nm from the route network; the leg starts from the nearest network point.`);
       if(r.snapB>15)warns.push(`${shortName(z.name)} is ${f0(r.snapB)} nm from the route network; the leg ends at the nearest network point.`);
       if(!cur){cur={from:a,to:z,coords:r.coords.slice(),passages:new Set(r.passages)};passages.push(cur)}else{cur.to=z;cur.coords=cur.coords.concat(r.coords.slice(1));r.passages.forEach(p=>cur.passages.add(p))}
@@ -830,6 +907,7 @@ async function calcRoute(){
     });
     if(!S.some(s=>s.bunker))warns.push("No bunker port ticked, so the lift won't be applied. Tick “Bunker here” on a port stay.");
     lastRoute={legs,runs:allRuns,stops:S.map(s=>({...s}))};
+    await loadPorts().catch(()=>{});const nNew=rememberMyPorts(S);if(nNew)warns.push(`${nNew} new point(s) added to ★ My ports for next time.`);
     renderRoute(warns);msg.textContent="";
   }catch(e){msg.textContent="Route failed: "+(e?.message||e)}
   $("#bRoute").disabled=false;
@@ -967,6 +1045,7 @@ async function listSaved(){
 }
 
 /* ---- boot ---- */
+renderMyPorts();
 (function boot(){
   let d=null;try{d=JSON.parse(localStorage.getItem("vfp_draft")||"null")}catch(e){}
   restoring=true;if(d&&d.plan&&Array.isArray(d.plan.legs)){loadPlan(d.plan,d.savedId||null);savedSnap=d.savedSnap||null}else loadPlan(sampleVoyage(),null);restoring=false;recordNow();
